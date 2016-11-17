@@ -219,7 +219,3 @@ def main(url, hostname, nap_time, data_dir):
             req = sess.patch(server + task['_links']['self'],
                              json={'status': 'error', 'data': task['data']})
             req.raise_for_status()
-
-
-if __name__ == '__main__':
-    main()
