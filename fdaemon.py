@@ -47,6 +47,27 @@ def run_direct(sess, server, task, task_dir):
 
     outfiles = []
 
+    mod_env_changes = ""
+    modules = task['environment'].get('modules', [])
+
+    if modules:
+        with open(os.devnull, 'w') as devnull:
+            mod_env_changes = subprocess.check_output(
+                ['modulecmd', 'python', 'load'] + modules,
+                stderr=devnull)
+            # TODO: add check to ensure mod_env_changes
+            #       contains only assignments for os.environ
+
+    def preexec_fn():
+        '''pre-exec function for further Popen calls to load
+        the environment as specified by the user.
+
+        we are injecting  the environment variables here instead
+        of using Popen's env= to inherit the parent environment first'''
+
+        os.environ.update(task['environment'].get('variables', {}))
+        exec(mod_env_changes)  # pylint: disable=exec-used
+
     for entry in task['settings']['commands']:
         name = entry['name']
         stdout_fn = path.join(task_dir, "{}.out".format(name))
@@ -66,7 +87,7 @@ def run_direct(sess, server, task, task_dir):
                 subprocess.check_call(
                     [entry['cmd']] + entry['args'],
                     stdout=stdout, stderr=stderr,
-                    cwd=task_dir)
+                    cwd=task_dir, preexec_fn=preexec_fn)
 
         except EnvironmentError as exc:
             raise_from(ClientError("error when opening stdout/err files"), exc)
