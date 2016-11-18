@@ -104,7 +104,7 @@ def run_direct(sess, server, task, task_dir):
                 task['data']['errors'].append(d_resp)
                 raise
 
-        except subprocess.SubprocessError as exc:
+        except Exception as exc:
             d_resp['msg'] = "error occurred while running: {}".format(exc)
             task['data']['errors'].append(d_resp)
             raise
