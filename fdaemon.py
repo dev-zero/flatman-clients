@@ -47,8 +47,10 @@ def run_direct(sess, server, task, task_dir):
 
     outfiles = []
 
+    settings = task['settings']
+
     mod_env_changes = ""
-    modules = task['environment'].get('modules', [])
+    modules = settings['environment'].get('modules', [])
 
     if modules:
         with open(os.devnull, 'w') as devnull:
@@ -65,10 +67,10 @@ def run_direct(sess, server, task, task_dir):
         we are injecting  the environment variables here instead
         of using Popen's env= to inherit the parent environment first'''
 
-        os.environ.update(task['environment'].get('variables', {}))
+        os.environ.update(settings['environment'].get('variables', {}))
         exec_(mod_env_changes)
 
-    for entry in task['settings']['commands']:
+    for entry in settings['commands']:
         name = entry['name']
         stdout_fn = path.join(task_dir, "{}.out".format(name))
         stderr_fn = path.join(task_dir, "{}.err".format(name))
