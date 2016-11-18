@@ -55,7 +55,7 @@ def run_direct(sess, server, task, task_dir):
     if modules:
         with open(os.devnull, 'w') as devnull:
             mod_env_changes = subprocess.check_output(
-                ['modulecmd', 'python', 'load'] + modules,
+                map(str, ['modulecmd', 'python', 'load'] + modules),
                 stderr=devnull)
             # TODO: add check to ensure mod_env_changes
             #       contains only assignments for os.environ
@@ -87,7 +87,7 @@ def run_direct(sess, server, task, task_dir):
             with open(stdout_fn, 'w') as stdout, \
                  open(stderr_fn, 'w') as stderr:
                 subprocess.check_call(
-                    [entry['cmd']] + entry['args'],
+                    map(str, [entry['cmd']] + entry['args']),
                     stdout=stdout, stderr=stderr,
                     cwd=task_dir, preexec_fn=preexec_fn)
 
