@@ -5,7 +5,7 @@ from setuptools import setup
 setup(
     name='fatman-clients',
     version='0.1.dev0',
-    py_modules=['fdaemon'],
+    py_modules=['fdaemon', 'fclient'],
     license='GPL3',
     install_requires=[
         'click>=6.6',
@@ -16,5 +16,6 @@ setup(
     entry_points='''
         [console_scripts]
         fdaemon=fdaemon:main
+        fadd_calc=fclient:add_calc
         ''',
     )
