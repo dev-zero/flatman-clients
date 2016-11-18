@@ -67,7 +67,9 @@ def run_direct(sess, server, task, task_dir):
         we are injecting  the environment variables here instead
         of using Popen's env= to inherit the parent environment first'''
 
-        os.environ.update(settings['environment'].get('variables', {}))
+        os.environ.update({k: str(v) for k, v in (settings['environment']
+                                                  .get('variables', {})
+                                                  .items())})
         exec_(mod_env_changes)
 
     for entry in settings['commands']:
