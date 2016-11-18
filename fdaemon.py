@@ -14,7 +14,7 @@ import click_log
 import requests
 
 # py2/3 compat calls
-from six import raise_from
+from six import raise_from, exec_
 from six.moves.urllib.parse import urlparse  # pylint: disable=import-error
 
 
@@ -66,7 +66,7 @@ def run_direct(sess, server, task, task_dir):
         of using Popen's env= to inherit the parent environment first'''
 
         os.environ.update(task['environment'].get('variables', {}))
-        exec(mod_env_changes)  # pylint: disable=exec-used
+        exec_(mod_env_changes)
 
     for entry in task['settings']['commands']:
         name = entry['name']
