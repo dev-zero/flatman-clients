@@ -8,13 +8,15 @@ import os
 from os import path
 from time import sleep
 from glob import glob
-# py2/3 compat calls
-from six import raise_from
-from six.moves.urllib.parse import urlparse
 
 import click
 import click_log
 import requests
+
+# py2/3 compat calls
+from six import raise_from
+from six.moves.urllib.parse import urlparse  # pylint: disable=import-error
+
 
 TASKS_URL = '{}/api/v2/tasks'
 
