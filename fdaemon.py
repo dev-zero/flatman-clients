@@ -86,15 +86,18 @@ def run_direct(sess, server, task, task_dir):
         logger.info("task %s: running command %s", task['id'], name)
 
         try:
-            with open(stdout_fn, 'w') as stdout, \
-                 open(stderr_fn, 'w') as stderr:
-                subprocess.check_call(
-                    map(str, [entry['cmd']] + entry['args']),
-                    stdout=stdout, stderr=stderr,
-                    cwd=task_dir, preexec_fn=preexec_fn)
+            stdout = open(stdout_fn, 'w')
+            stderr = open(stderr_fn, 'w')
+        except (OSError, IOError) as exc:
+            raise_from(
+                ClientError("error when opening {}".format(exc.filename)),
+                exc)
 
-        except EnvironmentError as exc:
-            raise_from(ClientError("error when opening stdout/err files"), exc)
+        try:
+            subprocess.check_call(
+                map(str, [entry['cmd']] + entry['args']),
+                stdout=stdout, stderr=stderr,
+                cwd=task_dir, preexec_fn=preexec_fn)
 
         except subprocess.CalledProcessError as exc:
             d_resp['msg'] = "command terminated with non-zero exit status"
@@ -110,6 +113,10 @@ def run_direct(sess, server, task, task_dir):
             d_resp['msg'] = "error occurred while running: {}".format(exc)
             task['data']['errors'].append(d_resp)
             raise
+
+        finally:
+            stdout.close()
+            stderr.close()
 
     return outfiles
 
