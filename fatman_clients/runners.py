@@ -4,7 +4,7 @@ import logging
 import subprocess
 import os
 from os import path
-from abc import ABCMeta, abstractmethod, abstractproperty
+from abc import ABCMeta, abstractmethod
 
 # py2/3 compat calls
 from six import raise_from, exec_
@@ -27,10 +27,13 @@ class RunnerBase:
         self._task_dir = task_dir
         self._running_task_func = running_task_func
 
+        self.outfiles = set()
         self.data = {
             'warnings': [],
             'errors': [],
             }
+        self.finished = False
+        self.success = False
 
     @abstractmethod
     def run(self):
@@ -41,21 +44,6 @@ class RunnerBase:
     def check(self):
         """Check the state of the calculation"""
         pass
-
-    @abstractproperty
-    def outfiles(self):
-        """Get a list of output files"""
-        return []
-
-    @abstractproperty
-    def finished(self):
-        """True if a task is finished (whether successful or not)"""
-        return False
-
-    @abstractproperty
-    def success(self):
-        """True if a task finished successfully"""
-        return False
 
 
 # class SlurmRunner():
@@ -77,21 +65,6 @@ class DirectRunner(RunnerBase):
 
     def __init__(self, *args, **kwargs):
         super(DirectRunner, self).__init__(*args, **kwargs)
-        self._outfiles = []
-        self._finished = False
-        self._success = False
-
-    @property
-    def outfiles(self):
-        return self._outfiles
-
-    @property
-    def finished(self):
-        return self._finished
-
-    @property
-    def success(self):
-        return self._success
 
     def check(self):
         """This is a blocking runner and check() is only called when the event loop encounters
@@ -106,13 +79,13 @@ class DirectRunner(RunnerBase):
             stdout_fn = path.join(self._task_dir, "{}.out".format(name))
             stderr_fn = path.join(self._task_dir, "{}.err".format(name))
 
-            if stdout_fn not in self._outfiles:
-                self._outfiles.append(stdout_fn)
+            # if we actually ran some commands, record their output
+            if path.exists(stdout_fn):
+                self.outfiles.add(stdout_fn)
+            if path.exists(stderr_fn):
+                self.outfiles.add(stderr_fn)
 
-            if stderr_fn not in self._outfiles:
-                self._outfiles.append(stderr_fn)
-
-        self._finished = True
+        self.finished = True
         raise RuntimeError("directrunner is unable to continue a 'running' job")
 
     def run(self):
@@ -120,7 +93,7 @@ class DirectRunner(RunnerBase):
         self._running_task_func()
 
         # no matter how we exit this function, the task will have terminated
-        self._finished = True
+        self.finished = True
 
         mod_env_changes = ""
         modules = self._settings['environment'].get('modules', [])
@@ -149,7 +122,6 @@ class DirectRunner(RunnerBase):
             name = entry['name']
             stdout_fn = path.join(self._task_dir, "{}.out".format(name))
             stderr_fn = path.join(self._task_dir, "{}.err".format(name))
-            self._outfiles += [stdout_fn, stderr_fn]
 
             d_resp = {
                 'tag': 'commands',
@@ -190,5 +162,7 @@ class DirectRunner(RunnerBase):
             finally:
                 stdout.close()
                 stderr.close()
+                self.outfiles.add(stdout_fn)
+                self.outfiles.add(stderr_fn)
 
-        self._success = True
+        self.success = True
