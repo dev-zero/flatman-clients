@@ -22,10 +22,9 @@ class RunnerBase:
     __metaclass__ = ABCMeta
 
     """Base class to implement runners"""
-    def __init__(self, settings, task_dir, running_task_func):
+    def __init__(self, settings, task_dir):
         self._settings = settings
         self._task_dir = task_dir
-        self._running_task_func = running_task_func
 
         self.outfiles = set()
         self.data = {
@@ -36,8 +35,10 @@ class RunnerBase:
         self.success = False
 
     @abstractmethod
-    def run(self):
-        """Run the calculation"""
+    def run(self, running_task_func):
+        """Run the calculation.
+
+        The function running_task_func is called as soon as the task is running."""
         pass
 
     @abstractmethod
@@ -125,7 +126,7 @@ class SlurmRunner(RunnerBase):
                 # skipped commands do not appear at all in the sacct list of jobs
                 pass
 
-    def run(self):
+    def run(self, running_task_func):
         stdout_fn = path.join(self._task_dir, "sbatch.out")
         stderr_fn = path.join(self._task_dir, "sbatch.err")
 
@@ -143,7 +144,7 @@ class SlurmRunner(RunnerBase):
             subprocess.check_call(['sbatch', "run.sh"],
                                   stdout=stdout, stderr=stderr,
                                   cwd=self._task_dir)
-            self._running_task_func()
+            running_task_func()
 
         except subprocess.CalledProcessError as exc:
             self.data['errors'].append({
@@ -199,9 +200,9 @@ class DirectRunner(RunnerBase):
         self.finished = True
         raise RuntimeError("directrunner is unable to continue a 'running' job")
 
-    def run(self):
+    def run(self, running_task_func):
         # since we block below, we set the task to running right away
-        self._running_task_func()
+        running_task_func()
 
         # no matter how we exit this function, the task will have terminated
         self.finished = True

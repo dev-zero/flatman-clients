@@ -105,14 +105,9 @@ def main(url, hostname, nap_time, data_dir):
         runner_name = None
         runner = None
 
-        # define a function object to be called by the runners once they started the task
-        def set_task_running():
-            req = sess.patch(server + task['_links']['self'], json={'status': 'running'})
-            req.raise_for_status()
-
         try:
             runner_name = task['settings']['machine']['runner']
-            runner = RUNNERS[runner_name](task['settings'], task_dir, set_task_running)
+            runner = RUNNERS[runner_name](task['settings'], task_dir)
         except KeyError:
             raise NotImplementedError(
                 "runner '{}' is not (yet) implemented".format(runner_name))
@@ -135,12 +130,19 @@ def main(url, hostname, nap_time, data_dir):
                     for chunk in req.iter_content(1024):
                         fhandle.write(chunk)
 
+        # define a function object to be called by the runners once they started the task
+        def set_task_running():
+            req = sess.patch(server + task['_links']['self'], json={'status': 'running'})
+            req.raise_for_status()
+
         # running tasks should be checked, while pending task get executed
         try:
             if task['status'] == 'running':
                 runner.check()
             else:
-                runner.run()
+                # there are blocking runners, which is why we use a callback here
+                # to give them the chance of setting a task to running
+                runner.run(set_task_running)
 
         except requests.exceptions.HTTPError as error:
             logger.exception("task %s: HTTP error occurred: %s\n%s",
