@@ -15,7 +15,7 @@ import requests
 # py2/3 compat calls
 from six.moves.urllib.parse import urlparse  # pylint: disable=import-error
 
-from .runners import ClientError, DirectRunner
+from .runners import ClientError, DirectRunner, SlurmRunner
 
 TASKS_URL = '{}/api/v2/tasks'
 
@@ -48,7 +48,7 @@ def task_iterator(sess, url, hostname, nap_time):
 
 # Register runners here:
 RUNNERS = {
-    # 'slurm': SlurmRunner,
+    'slurm': SlurmRunner,
     'direct': DirectRunner,
     }
 

@@ -46,18 +46,129 @@ class RunnerBase:
         pass
 
 
-# class SlurmRunner():
-#     def __init__(self, *args, **kwargs):
-#         super(SlurmRunner, self).__init__(*args, **kwargs)
-#
-#     @property
-#     def blocking(self):
-#         return False
-#
-#     def run(self):
-#         subprocess.check_call(['sbatch', self._task['settings']['cmd']],
-#                               cwd=self._task_dir)
-#         return []
+class SlurmRunner(RunnerBase):
+    """Runner implementation to run FATMAN tasks via SLURM"""
+
+    def __init__(self, *args, **kwargs):
+        super(SlurmRunner, self).__init__(*args, **kwargs)
+
+    def check(self):
+        """Use squeue and sacct to check for the task."""
+
+        tname = self._settings['name']
+
+        # squeue does not have a --parsable flag
+        # what we want is: JOBID|STATE|TIME|NODES
+        squeue_out = subprocess.check_output(
+            ['squeue', '--noheader', '--format=%i|%T|%M|%D', '--name=' + tname])
+        squeue_out = squeue_out.strip()
+
+        # TODO: we might want to store some data in the database:
+        # jobid, state, time, nodes = squeue_out.split('|')
+
+        # Anyway, if the job is still in the slurm queue, we can expect it
+        # to be either pending, or running or to be terminated.
+        # In the latter case we catch eventually it in the next iteration
+        if squeue_out:
+            return
+
+        # if the job isn't in the queue anymore, it is surely done
+        self.finished = True
+
+        # Check the slurm database for more information
+        sacct_out = subprocess.check_output(
+            ['sacct', '--long', '--parsable2', '--name=' + tname])
+        sacct_lines = sacct_out.strip().split('\n')
+
+        # we keep the header for this command to use the columns as keys
+        if len(sacct_lines) < 2:
+            raise RuntimeError("job could not be found using either squeue or sacct")
+
+        # extract the header column names
+        headers = [s.lower() for s in sacct_lines[0].split('|')]
+        # .. and convert each line to a dict and store them in a dict,
+        # with the jobname as key to match them to our commands
+        sacct_data = {d['jobname']: d for d in [dict(zip(headers, l.split('|'))) for l in sacct_lines[1:]]}
+
+        # we are going to upload all metadata in the runner key
+        self.data['runner'] = {'commands': sacct_data}
+
+        # check the parent job:
+        if sacct_data[tname]['state'] == 'COMPLETED':
+            self.success = True
+
+        # try to extract errors from the sacct data
+        for entry in self._settings['commands']:
+            name = entry['name']
+            try:
+                if sacct_data[name]['state'] != 'COMPLETED':
+                    # if the entire job succeeded, we obviously decided to ignore the error
+                    # for this this command
+                    # TODO: if the main job failed, we currently report all failed commands
+                    #       as errors, even though we decided to ignore their errors
+                    self.data['warnings' if self.success else 'errors'].append({
+                        'tag': 'commands',
+                        'entry': name,
+                        'msg': "command terminated with non-zero exit status",
+                        'returncode': sacct_data[name]['exitcode'],
+                        })
+
+                    # the srun output files might be of interest if they exist
+                    stdout_fn = path.join(self._task_dir, "{}.out".format(name))
+                    stderr_fn = path.join(self._task_dir, "{}.err".format(name))
+                    if path.exists(stdout_fn):
+                        self.outfiles.add(stdout_fn)
+                    if path.exists(stderr_fn):
+                        self.outfiles.add(stderr_fn)
+
+            except KeyError:
+                # skipped commands do not appear at all in the sacct list of jobs
+                pass
+
+    def run(self):
+        stdout_fn = path.join(self._task_dir, "sbatch.out")
+        stderr_fn = path.join(self._task_dir, "sbatch.err")
+
+        logger.info("running sbatch")
+
+        try:
+            stdout = open(stdout_fn, 'w')
+            stderr = open(stderr_fn, 'w')
+        except (OSError, IOError) as exc:
+            raise_from(
+                ClientError("error when opening {}".format(exc.filename)),
+                exc)
+
+        try:
+            subprocess.check_call(['sbatch', "run.sh"],
+                                  stdout=stdout, stderr=stderr,
+                                  cwd=self._task_dir)
+            self._running_task_func()
+
+        except subprocess.CalledProcessError as exc:
+            self.data['errors'].append({
+                'tag': 'commands',
+                'entry': 'sbatch',
+                'msg': "command terminated with non-zero exit status",
+                'returncode': exc.returncode,
+                })
+            self.finished = True
+            raise
+
+        except Exception as exc:
+            self.data['errors'].append({
+                'tag': 'commands',
+                'entry': 'sbatch',
+                'msg': "error occurred while running: {}".format(exc),
+                })
+            self.finished = True
+            raise
+
+        finally:
+            stdout.close()
+            stderr.close()
+            self.outfiles.add(stdout_fn)
+            self.outfiles.add(stderr_fn)
 
 
 class DirectRunner(RunnerBase):
