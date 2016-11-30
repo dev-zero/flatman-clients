@@ -22,19 +22,26 @@ TASKS_URL = '{}/api/v2/tasks'
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-def task_iterator(sess, url, hostname, nap_time):
+def task_iterator(sess, url, hostname, nap_time,
+                  ignore_pending=False, ignore_running=False):
     """Fetches new tasks and yields them"""
     while True:
-        logger.info("checking for pending or running tasks to continue")
 
-        req = sess.get(TASKS_URL.format(url),
-                       params={'machine': hostname, 'status': 'pending,running'})
-        req.raise_for_status()
-        tasks = req.json()
+        states = []
+        ignore_pending or states.append('pending')
+        ignore_running or states.append('running')
 
-        if tasks:
-            for task in tasks:
-                yield task
+        if states:
+            logger.info("checking for %s tasks to continue", ' or '.join(states))
+
+            req = sess.get(TASKS_URL.format(url),
+                           params={'machine': hostname, 'status': 'pending,running'})
+            req.raise_for_status()
+            tasks = req.json()
+
+            if tasks:
+                for task in tasks:
+                    yield task
 
         logger.info("fetching new task")
         req = sess.get(TASKS_URL.format(url), params={'limit': 1, 'status': 'new'})
@@ -43,7 +50,7 @@ def task_iterator(sess, url, hostname, nap_time):
         if tasks:
             yield tasks[0]
 
-        logger.info("no new tasks available, taking a nap")
+        logger.info("all done for now, taking a nap")
         sleep(nap_time)
 
 # Register runners here:
@@ -64,9 +71,19 @@ RUNNERS = {
 @click.option('--data-dir', type=click.Path(exists=True, resolve_path=True),
               default='./fdaemon-data', show_default=True,
               help="Data directory")
+@click.option('--run/--no-run',
+              default=True, show_default=True,
+              help="Run new jobs, otherwise only prepare and download them (running jobs are still checked)")
+@click.option('--ignore-pending/--no-ignore-pending',
+              default=False, show_default=True,
+              help="Ignore _pending_ tasks when fetching the list of tasks from the server")
+@click.option('--ignore-running/--no-ignore-running',
+              default=False, show_default=True,
+              help="Ignore _running_ tasks when fetching the list of tasks from the server")
 @click_log.simple_verbosity_option()
 @click_log.init(__name__)
-def main(url, hostname, nap_time, data_dir):
+def main(url, hostname, nap_time, data_dir,
+         run, ignore_pending, ignore_running):
     """FATMAN Calculation Runner Daemon"""
 
     os.chdir(data_dir)
@@ -77,7 +94,7 @@ def main(url, hostname, nap_time, data_dir):
     parsed_uri = urlparse(url)
     server = '{uri.scheme}://{uri.netloc}'.format(uri=parsed_uri)
 
-    for task in task_iterator(sess, url, hostname, nap_time):
+    for task in task_iterator(sess, url, hostname, nap_time, ignore_pending, ignore_running):
         task_dir = path.join(data_dir, task['id'])
 
         if task['status'] == 'new':
@@ -139,10 +156,13 @@ def main(url, hostname, nap_time, data_dir):
         try:
             if task['status'] == 'running':
                 runner.check()
-            else:
-                # there are blocking runners, which is why we use a callback here
-                # to give them the chance of setting a task to running
-                runner.run(set_task_running)
+            elif run:
+                if run:
+                    # there are blocking runners, which is why we use a callback here
+                    # to give them the chance of setting a task to running
+                    runner.run(set_task_running)
+                else:
+                    logger.info("task %s: skip running the task", task['id'])
 
         except requests.exceptions.HTTPError as error:
             logger.exception("task %s: HTTP error occurred: %s\n%s",
