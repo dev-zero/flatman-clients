@@ -63,20 +63,29 @@ def add_calc(url, **data):
 
     """
 
-    parsed_uri = urlparse(url)
-    server = '{uri.scheme}://{uri.netloc}'.format(uri=parsed_uri)
+    try:
+        parsed_uri = urlparse(url)
+        server = '{uri.scheme}://{uri.netloc}'.format(uri=parsed_uri)
 
-    sess = requests.Session()
-    sess.verify = False  # required to ignore the self-signed cert
+        sess = requests.Session()
+        sess.verify = False  # required to ignore the self-signed cert
 
-    click.echo("Creating calculation..")
-    req = sess.post(CALCULATION_URL.format(url), json=data)
-    req.raise_for_status()
-    click.echo(json.dumps(req.json(), sort_keys=True,
-                          indent=2, separators=(',', ': ')))
+        click.echo("Creating calculation..")
+        req = sess.post(CALCULATION_URL.format(url), json=data)
+        req.raise_for_status()
+        click.echo(json.dumps(req.json(), sort_keys=True,
+                              indent=2, separators=(',', ': ')))
 
-    click.echo("Creating task for calculation..")
-    req = sess.post(server + req.json()['_links']['tasks'])
-    req.raise_for_status()
-    click.echo(json.dumps(req.json(), sort_keys=True,
-                          indent=2, separators=(',', ': ')))
+        click.echo("Creating task for calculation..")
+        req = sess.post(server + req.json()['_links']['tasks'])
+        req.raise_for_status()
+        click.echo(json.dumps(req.json(), sort_keys=True,
+                              indent=2, separators=(',', ': ')))
+
+    except requests.exceptions.HTTPError as exc:
+        try:
+            msgs = exc.response.json()
+            attr, msg = list(msgs['errors'].items())[0]
+            raise click.BadParameter(msg, param_hint=attr)
+        except (ValueError, KeyError):
+            click.echo(exc.response.text, err=True)
