@@ -7,6 +7,7 @@ import click
 
 from six.moves.urllib.parse import urlparse  # pylint: disable=import-error
 
+from . import try_verify_by_system_ca_bundle
 
 CALCULATION_URL = '{}/api/v2/calculations'
 
@@ -70,7 +71,7 @@ def add_calc(url, **data):
         server = '{uri.scheme}://{uri.netloc}'.format(uri=parsed_uri)
 
         sess = requests.Session()
-        sess.verify = False  # required to ignore the self-signed cert
+        sess.verify = try_verify_by_system_ca_bundle()
 
         click.echo("Creating calculation..")
         req = sess.post(CALCULATION_URL.format(url), json=data)

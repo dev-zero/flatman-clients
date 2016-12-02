@@ -15,6 +15,7 @@ import requests
 # py2/3 compat calls
 from six.moves.urllib.parse import urlparse  # pylint: disable=import-error
 
+from . import try_verify_by_system_ca_bundle
 from .runners import ClientError, DirectRunner, SlurmRunner, MPIRunner
 
 TASKS_URL = '{}/api/v2/tasks'
@@ -92,7 +93,7 @@ def main(url, hostname, nap_time, data_dir,
     os.chdir(data_dir)
 
     sess = requests.Session()
-    sess.verify = False  # required to ignore the self-signed cert
+    sess.verify = try_verify_by_system_ca_bundle()
 
     parsed_uri = urlparse(url)
     server = '{uri.scheme}://{uri.netloc}'.format(uri=parsed_uri)
