@@ -11,6 +11,7 @@ from glob import glob
 import click
 import click_log
 import requests
+from requests.packages import urllib3
 
 # py2/3 compat calls
 from six.moves.urllib.parse import urlparse  # pylint: disable=import-error
@@ -84,16 +85,27 @@ RUNNERS = {
 @click.option('--one-shot/--no-one-shot',
               default=False, show_default=True,
               help="Do only one cycle of checking, preparing and running")
+@click.option('--ssl-verify/--no-ssl-verify',
+              default=True, show_default=True,
+              help="verify the servers SSL certificate")
 @click_log.simple_verbosity_option()
 @click_log.init(__name__)
 def main(url, hostname, nap_time, data_dir,
-         run, ignore_pending, ignore_running, one_shot):
+         run, ignore_pending, ignore_running, one_shot,
+         ssl_verify):
     """FATMAN Calculation Runner Daemon"""
 
     os.chdir(data_dir)
 
+    logging.captureWarnings(True)  # capture Python warnings using our logger
+
     sess = requests.Session()
-    sess.verify = try_verify_by_system_ca_bundle()
+
+    if ssl_verify:
+        sess.verify = try_verify_by_system_ca_bundle()
+    else:
+        sess.verify = False
+        urllib3.disable_warnings()
 
     parsed_uri = urlparse(url)
     server = '{uri.scheme}://{uri.netloc}'.format(uri=parsed_uri)

@@ -3,6 +3,7 @@
 import json
 
 import requests
+from requests.packages import urllib3
 import click
 
 from six.moves.urllib.parse import urlparse  # pylint: disable=import-error
@@ -38,7 +39,10 @@ def validate_basis_set_families(ctx, param, values):
 @click.option('--task/--no-task',
               default=True, show_default=True,
               help="also create a task for this calculation")
-def add_calc(url, **data):
+@click.option('--ssl-verify/--no-ssl-verify', required=False,
+              default=True, show_default=True,
+              help="verify the servers SSL certificate")
+def add_calc(url, ssl_verify, **data):
     """Create a new calculation on FATMAN.
 
     Examples:
@@ -71,7 +75,12 @@ def add_calc(url, **data):
         server = '{uri.scheme}://{uri.netloc}'.format(uri=parsed_uri)
 
         sess = requests.Session()
-        sess.verify = try_verify_by_system_ca_bundle()
+
+        if ssl_verify:
+            sess.verify = try_verify_by_system_ca_bundle()
+        else:
+            sess.verify = False
+            urllib3.disable_warnings()
 
         click.echo("Creating calculation..")
         req = sess.post(CALCULATION_URL.format(url), json=data)
