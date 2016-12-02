@@ -35,7 +35,7 @@ def validate_basis_set_families(ctx, param, values):
 @click.option('--basis-set-family', type=str, required=True, multiple=True,
               callback=validate_basis_set_families)
 @click.option('--code', type=str, required=True,
-              default="cp2k", show_default=True)
+              default="CP2K", show_default=True)
 @click.option('--task/--no-task',
               default=True, show_default=True,
               help="also create a task for this calculation")
@@ -55,7 +55,7 @@ def add_calc(url, ssl_verify, **data):
         --structure deltatest_H_1.00 \\
         --pseudo-family GTH-PBE \\
         --basis-set-family default:DZVP-MOLOPT-GTH \\
-        --code cp2k
+        --code CP2K
 
     \b
     # for a new GW100 calculation
@@ -66,7 +66,7 @@ def add_calc(url, ssl_verify, **data):
         --pseudo-family GTH-PBE \\
         --basis-set-family default:cc-QZV3P-GTH \\
         --basis-set-family ri_aux:RI_QZ_opt_basis \\
-        --code cp2k
+        --code CP2K
 
     """
 
