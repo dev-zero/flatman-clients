@@ -15,7 +15,7 @@ import requests
 # py2/3 compat calls
 from six.moves.urllib.parse import urlparse  # pylint: disable=import-error
 
-from .runners import ClientError, DirectRunner, SlurmRunner
+from .runners import ClientError, DirectRunner, SlurmRunner, MPIRunner
 
 TASKS_URL = '{}/api/v2/tasks'
 
@@ -27,8 +27,10 @@ def task_iterator(sess, url, hostname,
     """Fetches new tasks and yields them"""
 
     states = []
-    ignore_pending or states.append('pending')
-    ignore_running or states.append('running')
+    if not ignore_pending:
+        states.append('pending')
+    if not ignore_running:
+        states.append('running')
 
     if states:
         logger.info("checking for %s tasks to continue", ' or '.join(states))
@@ -54,6 +56,7 @@ def task_iterator(sess, url, hostname,
 RUNNERS = {
     'slurm': SlurmRunner,
     'direct': DirectRunner,
+    'mpirun': MPIRunner,
     }
 
 

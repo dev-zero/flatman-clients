@@ -278,3 +278,19 @@ class DirectRunner(RunnerBase):
                 self.outfiles.add(stderr_fn)
 
         self.success = True
+
+
+class MPIRunner(DirectRunner):
+    """A runner to directly run jobs via mpirun (in a blocking manner)
+       This re-uses the direct runner, by patching the settings to prefix them with the mpirun options.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super(MPIRunner, self).__init__(*args, **kwargs)
+
+        mpirun_args = ['--{}={}'.format(arg, value) for arg, value in self._settings['machine'].get('mpirun_args', {})]
+
+        for command in self._settings.commands:
+            # the new arguments are all passed to mpirun
+            command['args'] = mpirun_args + [command['cmd']] + command['args']
+            command['cmd'] = "mpirun"
