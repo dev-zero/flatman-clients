@@ -42,23 +42,25 @@ def add_calc(url, **data):
 
     Examples:
 
+    \b
     # for a new deltatest point calculation
-    fadd_calc \
-        --collection CP2K-Deltatest \
-        --test deltatest_H \
-        --structure Benzene-GW100 \
-        --pseudo-family GTH-PBE \
-        --basis-set-family default:cc-QZV3P-GTH \
-        --basis-set-family ri_aux:RI_QZ_opt_basis \
+    fadd_calc \\
+        --collection CP2K-Deltatest \\
+        --test deltatest_H \\
+        --structure deltatest_H_1.00 \\
+        --pseudo-family GTH-PBE \\
+        --basis-set-family default:DZVP-MOLOPT-GTH \\
         --code cp2k
 
+    \b
     # for a new GW100 calculation
-    fadd_calc \
-        --collection GW100-20161026 \
-        --test GW100 \
-        --structure deltatest_H_1.00 \
-        --pseudo-family GTH-PBE \
-        --basis-set-family default:DZVP-MOLOPT-SR-GTH \
+    fadd_calc \\
+        --collection GW100-20161026 \\
+        --test GW100 \\
+        --structure Benzene-GW100 \\
+        --pseudo-family GTH-PBE \\
+        --basis-set-family default:cc-QZV3P-GTH \\
+        --basis-set-family ri_aux:RI_QZ_opt_basis \\
         --code cp2k
 
     """
