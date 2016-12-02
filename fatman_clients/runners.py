@@ -291,7 +291,7 @@ class MPIRunner(DirectRunner):
         mpirun_args = ['--{}={}'.format(arg, value)
                        for arg, value in self._settings['machine'].get('mpirun_args', {}).items()]
 
-        for command in self._settings.commands:
+        for command in self._settings['commands']:
             # the new arguments are all passed to mpirun
             command['args'] = mpirun_args + [command['cmd']] + command['args']
             command['cmd'] = "mpirun"
