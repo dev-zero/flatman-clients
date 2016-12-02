@@ -63,7 +63,7 @@ RUNNERS = {
 @click.command()
 @click.option('--url', type=str, default='https://tctdb.chem.uzh.ch/fatman',
               show_default=True, help="The URL where FATMAN is running")
-@click.option('--hostname', type=str, default=socket.gethostname,
+@click.option('--hostname', type=str, default=lambda: socket.gethostname().split('.')[0],
               help="Override hostname-detection")
 @click.option('--nap-time', type=str, default=5*60,
               show_default=True,
@@ -102,11 +102,23 @@ def main(url, hostname, nap_time, data_dir,
             task_dir = path.join(data_dir, task['id'])
 
             if task['status'] == 'new':
-                req = sess.patch(server + task['_links']['self'],
-                                 json={'status': 'pending', 'machine': hostname})
-                req.raise_for_status()
-                task = req.json()
-                logger.info("aquired new task %s", task['id'])
+                try:
+                    req = sess.patch(server + task['_links']['self'],
+                                     json={'status': 'pending', 'machine': hostname})
+                    req.raise_for_status()
+                    task = req.json()
+                    logger.info("acquired new task %s", task['id'])
+
+                except requests.exceptions.HTTPError as error:
+                    try:
+                        msgs = error.response.json()
+                        logger.exception("task %s: acquisition failed: %s\n", task['id'], msgs['errors'])
+                    except (ValueError, KeyError):
+                        logger.exception("task %s: acquisition failed: %s\n", task['id'], error.response.text)
+
+                    continue
+                except requests.exceptions.RequestException:
+                    continue
 
             elif task['status'] == 'pending':
                 logger.info("continue pending task %s", task['id'])
