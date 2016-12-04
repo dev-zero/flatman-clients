@@ -97,8 +97,6 @@ def main(url, hostname, nap_time, data_dir,
 
     os.chdir(data_dir)
 
-    logging.captureWarnings(True)  # capture Python warnings using our logger
-
     sess = requests.Session()
 
     if ssl_verify:
@@ -167,7 +165,7 @@ def main(url, hostname, nap_time, data_dir,
 
                 os.mkdir(task_dir)
 
-                logging.info("task %s: downloading inputs", task['id'])
+                logger.info("task %s: downloading inputs", task['id'])
 
                 # download each input file by streaming
                 for infile in task['infiles']:
@@ -179,7 +177,7 @@ def main(url, hostname, nap_time, data_dir,
 
             # define a function object to be called by the runners once they started the task
             def set_task_running():
-                logging.info("task %s: started", task['id'])
+                logger.info("task %s: started", task['id'])
                 req = sess.patch(server + task['_links']['self'], json={'status': 'running'})
                 req.raise_for_status()
 
@@ -211,7 +209,7 @@ def main(url, hostname, nap_time, data_dir,
             # would be to check the upload files for duplicate and checksum
             # to determine whether we have to re-upload
             if runner.finished:
-                logging.info("task %s: finished, collecting output", task['id'])
+                logger.info("task %s: finished, collecting output", task['id'])
 
                 filepaths = []
 
@@ -235,7 +233,7 @@ def main(url, hostname, nap_time, data_dir,
                 # also upload additional non-empty output files from all commands
                 filepaths += [f for f in runner.outfiles if path.getsize(f)]
 
-                logging.info("task %s: uploading output", task['id'])
+                logger.info("task %s: uploading output", task['id'])
 
                 for filepath in filepaths:
                     data = {'name': path.relpath(filepath, task_dir)}
