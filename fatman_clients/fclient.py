@@ -107,8 +107,7 @@ def calc_add(ctx, **data):
     try:
         req = ctx.obj['session'].post(ctx.obj['calc_url'], json=data)
         req.raise_for_status()
-        click.echo(json.dumps(req.json(), sort_keys=True,
-                              indent=2, separators=(',', ': ')))
+        click.echo(json_pretty_dumps(req.json()))
 
     except requests.exceptions.HTTPError as exc:
         try:
@@ -121,8 +120,7 @@ def calc_add(ctx, **data):
     click.echo("Creating task for calculation..")
     req = ctx.obj['session'].post(ctx.obj['server'] + req.json()['_links']['tasks'])
     req.raise_for_status()
-    click.echo(json.dumps(req.json(), sort_keys=True,
-                          indent=2, separators=(',', ': ')))
+    click.echo(json_pretty_dumps(req.json()))
 
 
 @cli.group()
