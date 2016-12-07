@@ -10,8 +10,6 @@ from six.moves.urllib.parse import urlparse  # pylint: disable=import-error
 
 from . import try_verify_by_system_ca_bundle
 
-CALCULATION_URL = '{}/api/v2/calculations'
-
 
 def validate_basis_set_families(ctx, param, values):
     """Convert and validate basis set families arguments"""
@@ -24,10 +22,39 @@ def validate_basis_set_families(ctx, param, values):
             "basis set family must be in format type:name")
 
 
-@click.command()
+@click.group()
 @click.option('--url', type=str,
               default='https://tctdb.chem.uzh.ch/fatman', show_default=True,
               help="The URL where FATMAN is running")
+@click.option('--ssl-verify/--no-ssl-verify', required=False,
+              default=True, show_default=True,
+              help="verify the servers SSL certificate")
+@click.pass_context
+def cli(ctx, url, ssl_verify):
+    if ctx.obj is None:
+        ctx.obj = {}
+
+    ctx.obj['url'] = url
+
+    parsed_uri = urlparse(url)
+    ctx.obj['server'] = '{uri.scheme}://{uri.netloc}'.format(uri=parsed_uri)
+
+    ctx.obj['session'] = requests.Session()
+    if ssl_verify:
+        ctx.obj['session'].verify = try_verify_by_system_ca_bundle()
+    else:
+        ctx.obj['session'].verify = False
+        urllib3.disable_warnings()
+
+
+@cli.group()
+@click.pass_context
+def calc(ctx):
+    """Manage calculations"""
+    ctx.obj['calc_url'] = '{url}/api/v2/calculations'.format(**ctx.obj)
+
+
+@calc.command('add')
 @click.option('--collection', type=str, required=True)
 @click.option('--test', type=str, required=True)
 @click.option('--structure', type=str, required=True)
@@ -39,17 +66,15 @@ def validate_basis_set_families(ctx, param, values):
 @click.option('--task/--no-task',
               default=True, show_default=True,
               help="also create a task for this calculation")
-@click.option('--ssl-verify/--no-ssl-verify', required=False,
-              default=True, show_default=True,
-              help="verify the servers SSL certificate")
-def add_calc(url, ssl_verify, **data):
+@click.pass_context
+def calc_add(ctx, **data):
     """Create a new calculation on FATMAN.
 
     Examples:
 
     \b
     # for a new deltatest point calculation
-    fadd_calc \\
+    fclient calc add \\
         --collection CP2K-Deltatest \\
         --test deltatest_H \\
         --structure deltatest_H_1.00 \\
@@ -59,7 +84,7 @@ def add_calc(url, ssl_verify, **data):
 
     \b
     # for a new GW100 calculation
-    fadd_calc \\
+    fclient calc add \\
         --collection GW100-20161026 \\
         --test GW100 \\
         --structure Benzene-GW100 \\
@@ -70,21 +95,10 @@ def add_calc(url, ssl_verify, **data):
 
     """
 
-    parsed_uri = urlparse(url)
-    server = '{uri.scheme}://{uri.netloc}'.format(uri=parsed_uri)
-
-    sess = requests.Session()
-
-    if ssl_verify:
-        sess.verify = try_verify_by_system_ca_bundle()
-    else:
-        sess.verify = False
-        urllib3.disable_warnings()
-
     click.echo("Creating calculation..")
 
     try:
-        req = sess.post(CALCULATION_URL.format(url), json=data)
+        req = ctx.obj['session'].post(ctx.obj['calc_url'], json=data)
         req.raise_for_status()
         click.echo(json.dumps(req.json(), sort_keys=True,
                               indent=2, separators=(',', ': ')))
@@ -98,7 +112,7 @@ def add_calc(url, ssl_verify, **data):
             click.echo(exc.response.text, err=True)
 
     click.echo("Creating task for calculation..")
-    req = sess.post(server + req.json()['_links']['tasks'])
+    req = ctx.obj['session'].post(ctx.obj['server'] + req.json()['_links']['tasks'])
     req.raise_for_status()
     click.echo(json.dumps(req.json(), sort_keys=True,
                           indent=2, separators=(',', ': ')))

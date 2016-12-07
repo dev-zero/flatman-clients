@@ -16,6 +16,6 @@ setup(
     entry_points='''
         [console_scripts]
         fdaemon=fatman_clients.fdaemon:main
-        fadd_calc=fatman_clients.fclient:add_calc
+        fclient=fatman_clients.fclient:cli
         ''',
     )
