@@ -8,8 +8,6 @@ import requests
 from requests.packages import urllib3
 import click
 
-from six.moves.urllib.parse import urlparse  # pylint: disable=import-error
-
 from . import try_verify_by_system_ca_bundle
 
 
@@ -42,9 +40,6 @@ def cli(ctx, url, ssl_verify):
         ctx.obj = {}
 
     ctx.obj['url'] = url
-
-    parsed_uri = urlparse(url)
-    ctx.obj['server'] = '{uri.scheme}://{uri.netloc}'.format(uri=parsed_uri)
 
     ctx.obj['session'] = requests.Session()
     if ssl_verify:
@@ -118,7 +113,7 @@ def calc_add(ctx, **data):
             click.echo(exc.response.text, err=True)
 
     click.echo("Creating task for calculation..")
-    req = ctx.obj['session'].post(ctx.obj['server'] + req.json()['_links']['tasks'])
+    req = ctx.obj['session'].post(req.json()['_links']['tasks'])
     req.raise_for_status()
     click.echo(json_pretty_dumps(req.json()))
 

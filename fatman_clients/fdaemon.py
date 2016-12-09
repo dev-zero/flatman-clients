@@ -13,9 +13,6 @@ import click_log
 import requests
 from requests.packages import urllib3
 
-# py2/3 compat calls
-from six.moves.urllib.parse import urlparse  # pylint: disable=import-error
-
 from . import try_verify_by_system_ca_bundle
 from .runners import ClientError, DirectRunner, SlurmRunner, MPIRunner
 
@@ -105,16 +102,13 @@ def main(url, hostname, nap_time, data_dir,
         sess.verify = False
         urllib3.disable_warnings()
 
-    parsed_uri = urlparse(url)
-    server = '{uri.scheme}://{uri.netloc}'.format(uri=parsed_uri)
-
     while True:
         for task in task_iterator(sess, url, hostname, ignore_pending, ignore_running):
             task_dir = path.join(data_dir, task['id'])
 
             if task['status'] == 'new':
                 try:
-                    req = sess.patch(server + task['_links']['self'],
+                    req = sess.patch(task['_links']['self'],
                                      json={'status': 'pending', 'machine': hostname})
                     req.raise_for_status()
                     task = req.json()
@@ -134,13 +128,13 @@ def main(url, hostname, nap_time, data_dir,
             elif task['status'] == 'pending':
                 logger.info("continue pending task %s", task['id'])
                 # fetch the complete object
-                req = sess.get(server + task['_links']['self'])
+                req = sess.get(task['_links']['self'])
                 req.raise_for_status()
                 task = req.json()
             else:
                 logger.info("checking %s task %s", task['status'], task['id'])
                 # fetch the complete object
-                req = sess.get(server + task['_links']['self'])
+                req = sess.get(task['_links']['self'])
                 req.raise_for_status()
                 task = req.json()
 
@@ -169,7 +163,7 @@ def main(url, hostname, nap_time, data_dir,
 
                 # download each input file by streaming
                 for infile in task['infiles']:
-                    req = sess.get(server + infile['_links']['download'], stream=True)
+                    req = sess.get(infile['_links']['download'], stream=True)
                     req.raise_for_status()
                     with open(path.join(task_dir, infile['name']), 'wb') as fhandle:
                         for chunk in req.iter_content(1024):
@@ -178,7 +172,7 @@ def main(url, hostname, nap_time, data_dir,
             # define a function object to be called by the runners once they started the task
             def set_task_running():
                 logger.info("task %s: started", task['id'])
-                req = sess.patch(server + task['_links']['self'], json={'status': 'running'})
+                req = sess.patch(task['_links']['self'], json={'status': 'running'})
                 req.raise_for_status()
 
             # running tasks should be checked, while pending task get executed
@@ -238,11 +232,11 @@ def main(url, hostname, nap_time, data_dir,
                 for filepath in filepaths:
                     data = {'name': path.relpath(filepath, task_dir)}
                     with open(filepath, 'rb') as data_fh:
-                        req = sess.post(server + task['_links']['uploads'],
+                        req = sess.post(task['_links']['uploads'],
                                         data=data, files={'data': data_fh})
                         req.raise_for_status()
 
-                req = sess.patch(server + task['_links']['self'],
+                req = sess.patch(task['_links']['self'],
                                  json={'status': 'done' if runner.success else 'error',
                                        'data': runner.data})
                 req.raise_for_status()
