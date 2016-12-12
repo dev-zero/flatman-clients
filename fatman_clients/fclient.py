@@ -8,7 +8,10 @@ import requests
 from requests.packages import urllib3
 import click
 
-from . import try_verify_by_system_ca_bundle
+from . import (
+    try_verify_by_system_ca_bundle,
+    xyz_parser_iterator,
+    )
 
 
 def validate_basis_set_families(ctx, param, values):
@@ -206,42 +209,80 @@ def struct(ctx):
 
 
 @struct.command('add')
-@click.argument('name', type=str)
-@click.argument('xyzfile', type=click.File(mode='rb'))
-@click.argument('sets', type=str, nargs=-1)
+@click.argument('xyzfile', type=click.File(mode='r'))
+@click.option('--name', type=str,
+              help="Use the given name instead of trying to extract from the XYZ comment")
+@click.option('--name-prefix', type=str,
+              default="", show_default=True,
+              help="Prefix the name parsed from the XYZ file")
+@click.option('--name-field', type=int,
+              default=0, show_default=True,
+              help="Which field in the XYZ comment should be used as the name")
+@click.option('--set', 'sets', type=str, multiple=True, required=True,
+              help="Place the structure in the given structure set(s)")
 @click.option('--pbc/--no-pbc', default=True,
               show_default=True, help="Use periodic boundary conditions")
+@click.option('--dump/--no-dump', default=False,
+              show_default=True, help="Dump the parsed out structure")
 @click.pass_context
-def struct_add(ctx, name, xyzfile, sets, pbc):
+def struct_add(ctx, xyzfile, name, name_prefix, name_field, sets, pbc, dump):
     """Upload a structure (in XYZ format)"""
 
-    data = {
-        'name': name,
-        'sets': sets,
-        'pbc': pbc,
-        'format': 'xyz',
-        }
+    structures = {}
 
-    click.echo("Uploading structure '{}'.. ".format(name), nl=False)
+    complete_input = xyzfile.read()
 
-    try:
-        req = ctx.obj['sessison'].post(ctx.obj['struct_url'], data=data,
-                                       files={'geometry': xyzfile})
-        req.raise_for_status()
-    except requests.exceptions.HTTPError as exc:
-        click.echo("failed")
+    for (_, comment, _, match) in xyz_parser_iterator(complete_input, True):
+        if name:
+            if len(structures) >= 1:
+                raise click.BadParameter("more than one structure found in XYZ file", param_hint='name')
+
+            structure_name = name
+        else:
+            structure_name = name_prefix + comment.split(';')[name_field]
+
+        if name in structures.keys():
+            raise click.UsageError("duplicated name found for structure {}".format(name))
+
+        structures[structure_name] = match.span()
+
+        click.echo("Found structure {}".format(structure_name))
+
+        if dump:
+            click.echo(complete_input[match.span()[0]:match.span()[1]])
+
+    click.confirm("Do you want to upload the structures?", abort=True)
+
+    for name, (spos, epos) in structures.items():
+        click.echo("Uploading structure '{}'.. ".format(name), nl=False)
+
+        data = {
+            'name': name,
+            'sets': sets,
+            'pbc': pbc,
+            'format': 'xyz',
+            }
+
+        structure_file = BytesIO(complete_input[spos:epos].encode('utf-8'))
+
         try:
-            msgs = exc.response.json()
+            req = ctx.obj['session'].post(ctx.obj['struct_url'], data=data,
+                                          files={'geometry': structure_file})
+            req.raise_for_status()
+        except requests.exceptions.HTTPError as exc:
+            click.echo("failed")
+            try:
+                msgs = exc.response.json()
 
-            # try to extract the error message
-            if isinstance(msgs, dict) and 'errors' in msgs.keys():
-                ctx.fail(json_pretty_dumps(msgs['errors']))
+                # try to extract the error message
+                if isinstance(msgs, dict) and 'errors' in msgs.keys():
+                    ctx.fail(json_pretty_dumps(msgs['errors']))
 
-            ctx.fail(json_pretty_dumps(msgs))
-        except (ValueError, KeyError):
-            ctx.fail(exc.response.text)
-    except:
-        click.echo("failed")
-        raise
+                ctx.fail(json_pretty_dumps(msgs))
+            except (ValueError, KeyError):
+                ctx.fail(exc.response.text)
+        except:
+            click.echo("failed")
+            raise
 
-    click.echo("succeeded")
+        click.echo("succeeded")
