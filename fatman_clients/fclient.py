@@ -132,6 +132,7 @@ def basis(ctx):
               help="Dump also the basis during parsing")
 @click.pass_context
 def basis_add(ctx, basisset_file, dump_basis):
+    """Upload new basis sets from a file"""
     basissets = {}
     current_basis = None
 
@@ -195,3 +196,52 @@ def basis_add(ctx, basisset_file, dump_basis):
             raise
 
         click.echo("succeeded")
+
+
+@cli.group()
+@click.pass_context
+def struct(ctx):
+    """Manage structures"""
+    ctx.obj['struct_url'] = '{url}/api/v2/structures'.format(**ctx.obj)
+
+
+@struct.command('add')
+@click.argument('name', type=str)
+@click.argument('xyzfile', type=click.File(mode='rb'))
+@click.argument('sets', type=str, nargs=-1)
+@click.option('--pbc/--no-pbc', default=True,
+              show_default=True, help="Use periodic boundary conditions")
+@click.pass_context
+def struct_add(ctx, name, xyzfile, sets, pbc):
+    """Upload a structure (in XYZ format)"""
+
+    data = {
+        'name': name,
+        'sets': sets,
+        'pbc': pbc,
+        'format': 'xyz',
+        }
+
+    click.echo("Uploading structure '{}'.. ".format(name), nl=False)
+
+    try:
+        req = ctx.obj['sessison'].post(ctx.obj['struct_url'], data=data,
+                                       files={'geometry': xyzfile})
+        req.raise_for_status()
+    except requests.exceptions.HTTPError as exc:
+        click.echo("failed")
+        try:
+            msgs = exc.response.json()
+
+            # try to extract the error message
+            if isinstance(msgs, dict) and 'errors' in msgs.keys():
+                ctx.fail(json_pretty_dumps(msgs['errors']))
+
+            ctx.fail(json_pretty_dumps(msgs))
+        except (ValueError, KeyError):
+            ctx.fail(exc.response.text)
+    except:
+        click.echo("failed")
+        raise
+
+    click.echo("succeeded")
