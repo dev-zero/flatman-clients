@@ -163,6 +163,8 @@ def basis_add(ctx, basisset_file, dump_basis):
 
         basissets[current_basis].write(line.encode('utf-8'))
 
+    click.confirm("Do you want to upload the basis sets?", abort=True)
+
     for (element, family), basis_data in basissets.items():
         click.echo("Uploading basis set for '{}' and family '{}'.. ".format(element, family), nl=False)
 
