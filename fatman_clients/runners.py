@@ -2,6 +2,7 @@
 
 import logging
 import subprocess
+import time
 import os
 from os import path
 from abc import ABCMeta, abstractmethod
@@ -31,6 +32,7 @@ class RunnerBase:
         self.data = {
             'warnings': [],
             'errors': [],
+            'runner': {},
             }
         self.finished = False
         self.success = False
@@ -231,6 +233,8 @@ class DirectRunner(RunnerBase):
                                                       .items())})
             exec_(mod_env_changes)
 
+        self.data['runner']['commands'] = {}
+
         for entry in self._settings['commands']:
             name = entry['name']
             stdout_fn = path.join(self._task_dir, "{}.out".format(name))
@@ -252,10 +256,16 @@ class DirectRunner(RunnerBase):
                     exc)
 
             try:
+                start = time.time()
+
                 subprocess.check_call(
                     map(str, [entry['cmd']] + entry['args']),  # pylint: disable=bad-builtin
                     stdout=stdout, stderr=stderr,
                     cwd=self._task_dir, preexec_fn=preexec_fn)
+
+                self.data['runner']['commands'][name] = {
+                    'walltime': time.time() - start,
+                    }
 
             except subprocess.CalledProcessError as exc:
                 d_resp['msg'] = "command terminated with non-zero exit status"
