@@ -57,12 +57,14 @@ def cli(ctx, url, ssl_verify):
 def calc(ctx):
     """Manage calculations"""
     ctx.obj['calc_url'] = '{url}/api/v2/calculations'.format(**ctx.obj)
+    ctx.obj['structureset_url'] = '{url}/api/v2/structuresets'.format(**ctx.obj)
 
 
 @calc.command('add')
 @click.option('--collection', type=str, required=True)
 @click.option('--test', type=str, required=True)
-@click.option('--structure', type=str, required=True)
+@click.option('--structure', type=str, required=False)
+@click.option('--structure-set', type=str, required=False)
 @click.option('--pseudo-family', type=str, required=True)
 @click.option('--basis-set-family', type=str, required=True, multiple=True,
               callback=validate_basis_set_families)
@@ -72,7 +74,7 @@ def calc(ctx):
               default=True, show_default=True,
               help="also create a task for this calculation")
 @click.pass_context
-def calc_add(ctx, **data):
+def calc_add(ctx, structure_set, **data):
     """Create a new calculation on FATMAN.
 
     Examples:
@@ -83,6 +85,16 @@ def calc_add(ctx, **data):
         --collection CP2K-Deltatest \\
         --test deltatest_H \\
         --structure deltatest_H_1.00 \\
+        --pseudo-family GTH-PBE \\
+        --basis-set-family default:DZVP-MOLOPT-GTH \\
+        --code CP2K
+
+    \b
+    # for a new deltatest calculation
+    fclient calc add \\
+        --collection CP2K-Deltatest \\
+        --test deltatest_H \\
+        --structure-set DELTATEST \\
         --pseudo-family GTH-PBE \\
         --basis-set-family default:DZVP-MOLOPT-GTH \\
         --code CP2K
@@ -100,25 +112,64 @@ def calc_add(ctx, **data):
 
     """
 
-    click.echo("Creating calculation..")
+    if structure_set and data['structure']:
+        raise click.BadOptionUsage("structure and structure-set can not be specified together")
 
-    try:
-        req = ctx.obj['session'].post(ctx.obj['calc_url'], json=data)
+    if structure_set:
+        click.echo("Creating calculations.. ", nl=False)
+
+        req = ctx.obj['session'].get(ctx.obj['structureset_url'] + '/' + structure_set)
+        req.raise_for_status()
+
+        try:
+            url = req.json()['_links']['calculations']
+
+            req = ctx.obj['session'].post(url, json={k: v for k, v in data.items() if k != 'structure'})
+            req.raise_for_status()
+
+            calculations = req.json()
+
+            click.echo("succeeded")
+
+            for calculation in calculations:
+                click.echo(".. created calculation '{id}' for structure '{structure}'".format(**calculation))
+
+            for calculation in calculations:
+                click.echo(".. creating task for calculation '{id}'.. ".format(**calculation))
+                req = ctx.obj['session'].post(calculation['_links']['tasks'])
+                req.raise_for_status()
+                click.echo("succeeded")
+
+        except requests.exceptions.HTTPError as exc:
+            click.echo("failed")
+
+            try:
+                msgs = exc.response.json()
+                attr, msg = list(msgs['errors'].items())[0]
+                raise click.BadParameter(str(msg[0] if isinstance(msg, list) else msg), param_hint=attr)
+            except (ValueError, KeyError):
+                click.echo(exc.response.text, err=True)
+
+    else:
+        click.echo("Creating calculation..")
+
+        try:
+            req = ctx.obj['session'].post(ctx.obj['calc_url'], json=data)
+            req.raise_for_status()
+            click.echo(json_pretty_dumps(req.json()))
+
+        except requests.exceptions.HTTPError as exc:
+            try:
+                msgs = exc.response.json()
+                attr, msg = list(msgs['errors'].items())[0]
+                raise click.BadParameter(str(msg[0] if isinstance(msg, list) else msg), param_hint=attr)
+            except (ValueError, KeyError):
+                click.echo(exc.response.text, err=True)
+
+        click.echo("Creating task for calculation..")
+        req = ctx.obj['session'].post(req.json()['_links']['tasks'])
         req.raise_for_status()
         click.echo(json_pretty_dumps(req.json()))
-
-    except requests.exceptions.HTTPError as exc:
-        try:
-            msgs = exc.response.json()
-            attr, msg = list(msgs['errors'].items())[0]
-            raise click.BadParameter(str(msg[0] if isinstance(msg, list) else msg), param_hint=attr)
-        except (ValueError, KeyError):
-            click.echo(exc.response.text, err=True)
-
-    click.echo("Creating task for calculation..")
-    req = ctx.obj['session'].post(req.json()['_links']['tasks'])
-    req.raise_for_status()
-    click.echo(json_pretty_dumps(req.json()))
 
 
 @cli.group()
