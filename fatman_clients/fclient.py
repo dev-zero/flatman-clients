@@ -8,6 +8,8 @@ import requests
 from requests.packages import urllib3
 import click
 
+import six
+
 from . import (
     try_verify_by_system_ca_bundle,
     xyz_parser_iterator,
@@ -145,10 +147,18 @@ def calc_add(ctx, structure_set, **data):
 
             try:
                 msgs = exc.response.json()
-                attr, msg = list(msgs['errors'].items())[0]
-                raise click.BadParameter(str(msg[0] if isinstance(msg, list) else msg), param_hint=attr)
+                errors = msgs['errors']
+                attr, msg = six.next(six.iteritems(errors))
+                if attr in list(data.keys()) + ['structure_set']:
+                    raise click.BadParameter(
+                        '; '.join([str(m) for m in msg]) if isinstance(msg, list) else str(msg),
+                        param_hint=attr)
+                else:
+                    click.echo(exc.response.text, err=True)
+                    ctx.abort()
             except (ValueError, KeyError):
                 click.echo(exc.response.text, err=True)
+                ctx.abort()
 
     else:
         click.echo("Creating calculation..")
