@@ -255,17 +255,13 @@ class DirectRunner(RunnerBase):
                     ClientError("error when opening {}".format(exc.filename)),
                     exc)
 
-            try:
-                start = time.time()
+            start = time.time()
 
+            try:
                 subprocess.check_call(
                     map(str, [entry['cmd']] + entry['args']),  # pylint: disable=bad-builtin
                     stdout=stdout, stderr=stderr,
                     cwd=self._task_dir, preexec_fn=preexec_fn)
-
-                self.data['runner']['commands'][name] = {
-                    'walltime': time.time() - start,
-                    }
 
             except subprocess.CalledProcessError as exc:
                 d_resp['msg'] = "command terminated with non-zero exit status"
@@ -287,6 +283,10 @@ class DirectRunner(RunnerBase):
                 stderr.close()
                 self.outfiles.add(stdout_fn)
                 self.outfiles.add(stderr_fn)
+
+                self.data['runner']['commands'][name] = {
+                    'walltime': time.time() - start,
+                    }
 
         self.success = True
 
