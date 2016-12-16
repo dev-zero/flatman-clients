@@ -19,7 +19,7 @@ from . import (
 def validate_basis_set_families(ctx, param, values):
     """Convert and validate basis set families arguments"""
     try:
-        parsed = {k: v for k, v in (v.split(':', 2) for v in values)}
+        parsed = {k: v for k, v in (v.split(':', 1) for v in values)}
         assert all(parsed.keys()) and all(parsed.values())
         return parsed
     except (ValueError, AssertionError):
@@ -69,6 +69,9 @@ def calc(ctx):
 @click.option('--structure-set', type=str, required=False)
 @click.option('--pseudo-family', type=str, required=True)
 @click.option('--basis-set-family', type=str, required=True, multiple=True,
+              callback=validate_basis_set_families,
+              help="To be specified as <type>:<default family>")
+@click.option('--basis-set-family-fallback', type=str, multiple=True,
               callback=validate_basis_set_families)
 @click.option('--code', type=str, required=True,
               default="CP2K", show_default=True)
@@ -85,7 +88,7 @@ def calc_add(ctx, structure_set, **data):
     # for a new deltatest point calculation
     fclient calc add \\
         --collection CP2K-Deltatest \\
-        --test deltatest_H \\
+        --test deltatest \\
         --structure deltatest_H_1.00 \\
         --pseudo-family GTH-PBE \\
         --basis-set-family default:DZVP-MOLOPT-GTH \\
@@ -95,10 +98,11 @@ def calc_add(ctx, structure_set, **data):
     # for a new deltatest calculation
     fclient calc add \\
         --collection CP2K-Deltatest \\
-        --test deltatest_H \\
+        --test deltatest \\
         --structure-set DELTATEST \\
         --pseudo-family GTH-PBE \\
         --basis-set-family default:DZVP-MOLOPT-GTH \\
+        --basis-set-family-fallback default:DZVP-MOLOPT-SR-GTH \\
         --code CP2K
 
     \b
