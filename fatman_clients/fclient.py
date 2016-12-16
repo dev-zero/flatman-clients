@@ -141,7 +141,7 @@ def calc_add(ctx, structure_set, **data):
                 click.echo(".. created calculation '{id}' for structure '{structure}'".format(**calculation))
 
             for calculation in calculations:
-                click.echo(".. creating task for calculation '{id}'.. ".format(**calculation))
+                click.echo(".. creating task for calculation '{id}'.. ".format(**calculation), nl=False)
                 req = ctx.obj['session'].post(calculation['_links']['tasks'])
                 req.raise_for_status()
                 click.echo("succeeded")
