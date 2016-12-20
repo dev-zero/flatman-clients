@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 def task_iterator(sess, url, hostname,
-                  ignore_pending=False, ignore_running=False):
+                  ignore_pending=False, ignore_running=False, acquire=True):
     """Fetches new tasks and yields them"""
 
     states = []
@@ -43,12 +43,13 @@ def task_iterator(sess, url, hostname,
             for task in tasks:
                 yield task
 
-    logger.info("fetching new task")
-    req = sess.get(TASKS_URL.format(url), params={'limit': 1, 'status': 'new'})
-    req.raise_for_status()
-    tasks = req.json()
-    if tasks:
-        yield tasks[0]
+    if acquire:
+        logger.info("fetching new task")
+        req = sess.get(TASKS_URL.format(url), params={'limit': 1, 'status': 'new'})
+        req.raise_for_status()
+        tasks = req.json()
+        if tasks:
+            yield tasks[0]
 
 
 # Register runners here:
@@ -79,6 +80,9 @@ RUNNERS = {
 @click.option('--ignore-running/--no-ignore-running',
               default=False, show_default=True,
               help="Ignore _running_ tasks when fetching the list of tasks from the server")
+@click.option('--acquire/--no-acquire',
+              default=True, show_default=True,
+              help="Acquire new tasks after checking pending and running")
 @click.option('--one-shot/--no-one-shot',
               default=False, show_default=True,
               help="Do only one cycle of checking, preparing and running")
@@ -88,7 +92,7 @@ RUNNERS = {
 @click_log.simple_verbosity_option()
 @click_log.init(__name__)
 def main(url, hostname, nap_time, data_dir,
-         run, ignore_pending, ignore_running, one_shot,
+         run, ignore_pending, ignore_running, acquire, one_shot,
          ssl_verify):
     """FATMAN Calculation Runner Daemon"""
 
@@ -103,7 +107,7 @@ def main(url, hostname, nap_time, data_dir,
         urllib3.disable_warnings()
 
     while True:
-        for task in task_iterator(sess, url, hostname, ignore_pending, ignore_running):
+        for task in task_iterator(sess, url, hostname, ignore_pending, ignore_running, acquire):
             task_dir = path.join(data_dir, task['id'])
 
             if task['status'] == 'new':
