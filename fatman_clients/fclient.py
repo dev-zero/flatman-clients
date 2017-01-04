@@ -3,6 +3,7 @@
 import json
 import re
 from io import BytesIO
+from uuid import UUID
 
 import requests
 from requests.packages import urllib3
@@ -186,6 +187,41 @@ def calc_add(ctx, structure_set, **data):
         click.echo(json_pretty_dumps(req.json()))
 
 
+@calc.group('action')
+@click.option('--calculation', type=UUID, required=False, multiple=True,
+              help="restrict action to specified calculations")
+@click.pass_context
+def calc_action(ctx, calculation):
+    """Run actions for results"""
+
+    ctx.obj['calc_action_uuids'] = []
+
+    if calculation:
+        ctx.obj['calc_action_uuids'] = calculation
+
+
+@calc_action.command('generate-results')
+@click.option('--update/--no-update', default=False, show_default=True,
+              help="Rewrite the result even if already present")
+@click.pass_context
+def calc_action_generate_results(ctx, update):
+    """Parse results from artifacts and write the results to the calculation"""
+
+    if ctx.obj['calc_action_uuids']:
+        for calc_uuid in ctx.obj['calc_action_uuids']:
+            click.echo("Trigger result generation for calculation {}".format(calc_uuid))
+            req = ctx.obj['session'].post(ctx.obj['calc_url'] + '/{}/action'.format(calc_uuid),
+                                          json={'generateResults': {'update': update}})
+            req.raise_for_status()
+    else:
+        click.echo("Trigger result generation for all calculations")
+        req = ctx.obj['session'].post(ctx.obj['calc_url'] + '/action',
+                                      json={'generateResults': {'update': update}})
+        req.raise_for_status()
+
+    # TODO: implement result parsing and waiting for finish
+
+
 @cli.group()
 @click.pass_context
 def basis(ctx):
@@ -351,3 +387,27 @@ def struct_add(ctx, xyzfile, name, name_prefix, name_field, sets, pbc, dump):
             raise
 
         click.echo("succeeded")
+
+
+@cli.group()
+@click.pass_context
+def task(ctx):
+    """Manage tasks"""
+    ctx.obj['task_url'] = '{url}/api/v2/tasks'.format(**ctx.obj)
+
+
+@task.command('upload')
+@click.argument('task_id', type=UUID)
+@click.argument('filename', type=click.File(mode='rb'))
+@click.argument('name', type=str)
+@click.pass_context
+def task_uplodate(ctx, task_id, filename, name):
+    """Upload artifacts for given task using the specified name"""
+
+    req = ctx.obj['session'].get(ctx.obj['task_url'] + '/{}'.format(task_id))
+    req.raise_for_status()
+    task_content = req.json()
+
+    req = ctx.obj['session'].post(task_content['_links']['uploads'],
+                                  data={'name': name}, files={'data': filename})
+    req.raise_for_status()
