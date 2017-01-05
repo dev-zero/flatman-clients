@@ -10,6 +10,7 @@ from os import path
 import requests
 from requests.packages import urllib3
 import click
+from terminaltables import SingleTable
 
 import six
 
@@ -187,6 +188,49 @@ def calc_add(ctx, structure_set, **data):
         req = ctx.obj['session'].post(req.json()['_links']['tasks'])
         req.raise_for_status()
         click.echo(json_pretty_dumps(req.json()))
+
+
+@calc.command('list')
+@click.option('--collection', type=str)
+@click.option('--test', type=str)
+@click.option('--structure', type=str)
+@click.option('--code', type=str)
+@click.option('--status', type=str)
+@click.option('--show-ids/--no-show-ids',
+              default=False, show_default=True,
+              help="whether to add a column containing the IDs")
+@click.pass_context
+def calc_list(ctx, show_ids, **filters):
+    """
+    List calculations. Use the parameters to limit the list to certain subsets of calculations
+    """
+
+    # filter out filters not specified
+    params = {k: v for k, v in filters.items() if v is not None}
+
+    req = ctx.obj['session'].get(ctx.obj['calc_url'], params=params)
+    req.raise_for_status()
+    calcs = req.json()
+
+    table_data = [
+        ['test', 'structure', 'code', 'collection', 'created', 'modified', 'status', 'result_avail?'],
+        ]
+
+    if show_ids:
+        table_data[0] += ['calc_id', 'current_task_id']
+
+    for cal in calcs:
+        click.echo(cal)
+        table_data.append([
+            cal['test'], cal['structure'], cal['code'], cal['collection'],
+            cal.get('current_task', {}).get('ctime', "(unavail)"),
+            cal.get('current_task', {}).get('mtime', "(unavail)"),
+            cal.get('current_task', {}).get('status', "(unavail)"),
+            cal['results_available'],
+            ] + ([cal['id'], cal.get('current_task', {}).get('id', "(unavail)")] if show_ids else []))
+
+    table_instance = SingleTable(table_data)
+    click.echo(table_instance.table)
 
 
 @calc.group('action')
