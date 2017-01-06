@@ -7,6 +7,8 @@ from uuid import UUID
 import os
 from os import path
 
+from collections import OrderedDict
+
 import requests
 from requests.packages import urllib3
 import click
@@ -220,7 +222,6 @@ def calc_list(ctx, show_ids, **filters):
         table_data[0] += ['calc_id', 'current_task_id']
 
     for cal in calcs:
-        click.echo(cal)
         table_data.append([
             cal['test'], cal['structure'], cal['code'], cal['collection'],
             cal.get('current_task', {}).get('ctime', "(unavail)"),
@@ -240,10 +241,7 @@ def calc_list(ctx, show_ids, **filters):
 def calc_action(ctx, calculation):
     """Run actions for results"""
 
-    ctx.obj['calc_action_uuids'] = []
-
-    if calculation:
-        ctx.obj['calc_action_uuids'] = calculation
+    ctx.obj['calc_action_uuids'] = calculation
 
 
 @calc_action.command('generate-results')
@@ -508,3 +506,75 @@ def task_upload_artifact(ctx, task_id, filename, name):
     req = ctx.obj['session'].post(task_content['_links']['uploads'],
                                   data={'name': name}, files={'data': filename})
     req.raise_for_status()
+
+
+@cli.group()
+@click.pass_context
+def testresult(ctx):
+    """Manage test results"""
+    ctx.obj['testresult_url'] = '{url}/api/v2/testresults'.format(**ctx.obj)
+
+
+@testresult.command('list')
+@click.pass_context
+def testresult_list(ctx):
+    """
+    List test results
+    """
+
+    req = ctx.obj['session'].get(ctx.obj['testresult_url'])
+    req.raise_for_status()
+    testresults = req.json()
+
+    table_data = [
+        ['id', 'test', 'calculations', 'data'],
+        ]
+
+    for tresult in testresults:
+        data = OrderedDict()
+
+        if tresult['test'] == 'deltatest':
+            data['status'] = tresult['data']['status']
+
+        data.update({'check.%s' % k: str(v) for k, v in tresult['data'].get('checks', {}).items()})
+
+        table_data.append([
+            tresult['id'],
+            tresult['test'],
+            '\n'.join([c['id'] for c in tresult['calculations']]),
+            '\n'.join(': '.join(t) for t in data.items())])
+
+    table_instance = SingleTable(table_data)
+    click.echo(table_instance.table)
+
+
+@testresult.group('action')
+@click.option('--id', 'tids', type=UUID, required=False, multiple=True,
+              help="restrict action to specified testresult")
+@click.pass_context
+def testresult_action(ctx, tids):
+    """Run actions for testresults"""
+
+    ctx.obj['testresult_action_uuids'] = tids
+
+
+@testresult_action.command('generate-results')
+@click.option('--update/--no-update', default=False, show_default=True,
+              help="Rewrite the testresult even if already present")
+@click.pass_context
+def testresult_action_generate_results(ctx, update):
+    """Read results from calculations and generate respective test results"""
+
+    if ctx.obj['testresult_action_uuids']:
+        for tid in ctx.obj['testresult_action_uuids']:
+            click.echo("Trigger test result (re-)generation for test result {}".format(tid))
+            req = ctx.obj['session'].post(ctx.obj['testresult_url'] + '/{}/action'.format(tid),
+                                          json={'generate': {'update': update}})
+            req.raise_for_status()
+    else:
+        click.echo("Trigger test result (re-)generation for all calculations, resp. test results")
+        req = ctx.obj['session'].post(ctx.obj['testresult_url'] + '/action',
+                                      json={'generate': {'update': update}})
+        req.raise_for_status()
+
+    # TODO: implement result parsing and waiting for finish
