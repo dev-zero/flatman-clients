@@ -6,13 +6,14 @@ from io import BytesIO
 from uuid import UUID
 import os
 from os import path
+import sys
 
 from collections import OrderedDict
 
 import requests
 from requests.packages import urllib3
 import click
-from terminaltables import SingleTable
+from terminaltables import SingleTable, AsciiTable
 
 import six
 
@@ -230,7 +231,10 @@ def calc_list(ctx, show_ids, **filters):
             cal['results_available'],
             ] + ([cal['id'], cal.get('current_task', {}).get('id', "(unavail)")] if show_ids else []))
 
-    table_instance = SingleTable(table_data)
+    if sys.stdout.isatty():
+        table_instance = SingleTable(table_data)
+    else:
+        table_instance = AsciiTable(table_data)
     click.echo(table_instance.table)
 
 
@@ -544,7 +548,10 @@ def testresult_list(ctx):
             '\n'.join([c['id'] for c in tresult['calculations']]),
             '\n'.join(': '.join(t) for t in data.items())])
 
-    table_instance = SingleTable(table_data)
+    if sys.stdout.isatty():
+        table_instance = SingleTable(table_data)
+    else:
+        table_instance = AsciiTable(table_data)
     click.echo(table_instance.table)
 
 
