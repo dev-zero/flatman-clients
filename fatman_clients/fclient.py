@@ -82,11 +82,11 @@ def calc(ctx):
               callback=validate_basis_set_families)
 @click.option('--code', type=str, required=True,
               default="CP2K", show_default=True)
-@click.option('--task/--no-task',
+@click.option('--task/--no-task', 'create_task',
               default=True, show_default=True,
               help="also create a task for this calculation")
 @click.pass_context
-def calc_add(ctx, structure_set, **data):
+def calc_add(ctx, structure_set, create_task, **data):
     """Create a new calculation on FATMAN.
 
     Examples:
@@ -147,11 +147,14 @@ def calc_add(ctx, structure_set, **data):
             for calculation in calculations:
                 click.echo(".. created calculation '{id}' for structure '{structure}'".format(**calculation))
 
-            for calculation in calculations:
-                click.echo(".. creating task for calculation '{id}'.. ".format(**calculation), nl=False)
-                req = ctx.obj['session'].post(calculation['_links']['tasks'])
-                req.raise_for_status()
-                click.echo("succeeded")
+            if create_task:
+                for calculation in calculations:
+                    click.echo(".. creating task for calculation '{id}'.. ".format(**calculation), nl=False)
+                    req = ctx.obj['session'].post(calculation['_links']['tasks'])
+                    req.raise_for_status()
+                    click.echo("succeeded")
+            else:
+                click.echo("skipping task creation..")
 
         except requests.exceptions.HTTPError as exc:
             click.echo("failed")
@@ -187,10 +190,13 @@ def calc_add(ctx, structure_set, **data):
             except (ValueError, KeyError):
                 click.echo(exc.response.text, err=True)
 
-        click.echo("Creating task for calculation..")
-        req = ctx.obj['session'].post(req.json()['_links']['tasks'])
-        req.raise_for_status()
-        click.echo(json_pretty_dumps(req.json()))
+        if create_task:
+            click.echo("Creating task for calculation..")
+            req = ctx.obj['session'].post(req.json()['_links']['tasks'])
+            req.raise_for_status()
+            click.echo(json_pretty_dumps(req.json()))
+        else:
+            click.echo("skipping task creation..")
 
 
 @calc.command('list')
