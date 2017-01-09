@@ -65,7 +65,7 @@ RUNNERS = {
               show_default=True, help="The URL where FATMAN is running")
 @click.option('--hostname', type=str, default=lambda: socket.gethostname().split('.')[0],
               help="Override hostname-detection")
-@click.option('--nap-time', type=str, default=5*60,
+@click.option('--nap-time', type=int, default=5*60,
               show_default=True,
               help="Time to sleep if no new tasks are available")
 @click.option('--data-dir', type=click.Path(exists=True, resolve_path=True),
