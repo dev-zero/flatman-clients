@@ -7,13 +7,14 @@ from uuid import UUID
 import os
 from os import path
 import sys
-
+import csv
 from collections import OrderedDict
 
 import requests
 from requests.packages import urllib3
 import click
 from terminaltables import SingleTable, AsciiTable
+import dpath
 
 import six
 
@@ -22,6 +23,9 @@ from . import (
     xyz_parser_iterator,
     )
 
+
+# the maximal number of calculations to fetch details for
+MAX_CALC_DETAILS = 200
 
 def validate_basis_set_families(ctx, param, values):
     """Convert and validate basis set families arguments"""
@@ -200,16 +204,24 @@ def calc_add(ctx, structure_set, create_task, **data):
 
 
 @calc.command('list')
-@click.option('--collection', type=str)
-@click.option('--test', type=str)
-@click.option('--structure', type=str)
-@click.option('--code', type=str)
-@click.option('--status', type=str)
+@click.option('--collection', type=str, help="filter by collection")
+@click.option('--test', type=str, help="filter by test ('GW100, 'deltatest', ..)")
+@click.option('--structure', type=str, help="filter by structure ('GW100 Hydrogen peroxide', 'deltatest_H_1.00', ..)")
+@click.option('--code', type=str, help="filter by used code ('CP2K', 'QE', ..)")
+@click.option('--status', type=str, help="filter by status ('done', 'new', 'running', ..)")
 @click.option('--show-ids/--no-show-ids',
               default=False, show_default=True,
-              help="whether to add a column containing the IDs")
+              help="add columns with calculation and task ids")
+@click.option('--column', '-c', 'columns', type=str, multiple=True,
+              help="specify paths into the calculation object to be used as column")
+@click.option('--csv-output', is_flag=True,
+              default=False, show_default=True,
+              help="output in CSV format")
+@click.option('--with-details/--without-details',
+              default=False, show_default=True,
+              help="fetch details for selected calculations")
 @click.pass_context
-def calc_list(ctx, show_ids, **filters):
+def calc_list(ctx, show_ids, columns, csv_output, with_details, **filters):
     """
     List calculations. Use the parameters to limit the list to certain subsets of calculations
     """
@@ -221,50 +233,66 @@ def calc_list(ctx, show_ids, **filters):
     req.raise_for_status()
     calcs = req.json()
 
-    table_data = [
-        ['test', 'structure', 'code', 'collection', 'created', 'modified', 'status', 'result_avail?'],
-        ]
+    if with_details:
+        if len(calcs) > MAX_CALC_DETAILS:
+            raise click.UsageError("The number of returned calculations is too high to fetch details")
 
-    if show_ids:
-        table_data[0] += ['calc_id', 'current_task_id']
+        click.echo('Please wait, fetching details..', err=True)
 
-    for cal in calcs:
-        table_data.append([
-            cal['test'], cal['structure'], cal['code'], cal['collection'],
-            cal.get('current_task', {}).get('ctime', "(unavail)"),
-            cal.get('current_task', {}).get('mtime', "(unavail)"),
-            cal.get('current_task', {}).get('status', "(unavail)"),
-            cal['results_available'],
-            ] + ([cal['id'], cal.get('current_task', {}).get('id', "(unavail)")] if show_ids else []))
+        with click.progressbar(calcs, file=sys.stderr) as bar:
+            for cal in bar:
+                req = ctx.obj['session'].get(cal['_links']['self'])
+                req.raise_for_status()
+                cal.update(req.json())
 
-    if sys.stdout.isatty():
-        table_instance = SingleTable(table_data)
+    table_data = []
+
+    if not columns:
+        table_data.append(['test', 'structure', 'code', 'collection', 'last modified', 'status', 'result_avail?'])
+
+        if show_ids:
+            table_data[0] += ['calc_id', 'current_task_id']
+
+        for cal in calcs:
+            table_data.append([
+                cal['test'], cal['structure'], cal['code'], cal['collection'],
+                cal.get('current_task', {}).get('mtime', "(unavail)"),
+                cal.get('current_task', {}).get('status', "(unavail)"),
+                cal['results_available'],
+                ] + ([cal['id'], cal.get('current_task', {}).get('id', "(unavail)")] if show_ids else []))
     else:
-        table_instance = AsciiTable(table_data)
-    click.echo(table_instance.table)
+        # so, a '--column a=b/c --column d=e --column =g/h/i' results in a header 'a,d,' with contents of b/c, e, g/h/i
+        header, paths = zip(*[p.split('=', 1) if '=' in p else (p.split('/')[-1], p) for p in columns])
+
+        table_data.append(header)
+
+        table_data += [[dpath.util.get(c, p) for p in paths] for c in calcs]
+
+    if csv_output:
+        writer = csv.writer(sys.stdout)
+        # when printing CSV we don't print an empty header
+        writer.writerows(table_data if any(h for h in table_data[0]) else table_data[1:])
+    else:
+        if sys.stdout.isatty():
+            table_instance = SingleTable(table_data)
+        else:
+            table_instance = AsciiTable(table_data)
+        click.echo(table_instance.table)
 
 
-@calc.group('action')
-@click.option('--calculation', type=UUID, required=False, multiple=True,
-              help="restrict action to specified calculations")
-@click.pass_context
-def calc_action(ctx, calculation):
-    """Run actions for results"""
-
-    ctx.obj['calc_action_uuids'] = calculation
-
-
-@calc_action.command('generate-results')
+@calc.command('generate-results')
 @click.option('--update/--no-update', default=False, show_default=True,
               help="Rewrite the result even if already present")
+@click.option('--id', 'ids', type=UUID, required=False, multiple=True,
+              help="restrict action to specified calculation ids")
 @click.pass_context
-def calc_action_generate_results(ctx, update):
-    """Parse results from artifacts and write the results to the calculation"""
+def calc_generate_results(ctx, update, ids):
+    """Parse results from artifacts and write them to the calculation"""
 
-    if ctx.obj['calc_action_uuids']:
-        for calc_uuid in ctx.obj['calc_action_uuids']:
-            click.echo("Trigger result generation for calculation {}".format(calc_uuid))
-            req = ctx.obj['session'].post(ctx.obj['calc_url'] + '/{}/action'.format(calc_uuid),
+    if ids:
+        for cid in ids:
+            click.echo("Trigger result generation for calculation {}".format(cid))
+            req = ctx.obj['session'].post(ctx.obj['calc_url'] + '/{}/action'.format(cid),
                                           json={'generateResults': {'update': update}})
             req.raise_for_status()
     else:
@@ -561,25 +589,17 @@ def testresult_list(ctx):
     click.echo(table_instance.table)
 
 
-@testresult.group('action')
-@click.option('--id', 'tids', type=UUID, required=False, multiple=True,
-              help="restrict action to specified testresult")
-@click.pass_context
-def testresult_action(ctx, tids):
-    """Run actions for testresults"""
-
-    ctx.obj['testresult_action_uuids'] = tids
-
-
-@testresult_action.command('generate-results')
+@testresult.command('generate-results')
 @click.option('--update/--no-update', default=False, show_default=True,
               help="Rewrite the testresult even if already present")
+@click.option('--id', 'ids', type=UUID, required=False, multiple=True,
+              help="restrict action to specified testresult")
 @click.pass_context
-def testresult_action_generate_results(ctx, update):
+def testresult_generate_results(ctx, update, ids):
     """Read results from calculations and generate respective test results"""
 
-    if ctx.obj['testresult_action_uuids']:
-        for tid in ctx.obj['testresult_action_uuids']:
+    if ids:
+        for tid in ids:
             click.echo("Trigger test result (re-)generation for test result {}".format(tid))
             req = ctx.obj['session'].post(ctx.obj['testresult_url'] + '/{}/action'.format(tid),
                                           json={'generate': {'update': update}})
