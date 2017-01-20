@@ -305,6 +305,21 @@ def calc_generate_results(ctx, update, ids):
     # TODO: implement result parsing and waiting for finish
 
 
+@calc.command('retry')
+@click.argument('ids', metavar='<ID 1> [<ID 2>..]', type=UUID, nargs=-1, required=True)
+@click.pass_context
+def calc_retry(ctx, ids):
+    """Re-run specified calculation(s)"""
+
+    for cid in ids:
+        req = ctx.obj['session'].get(ctx.obj['calc_url'] + '/{}'.format(cid))
+        req.raise_for_status()
+        calc_content = req.json()
+
+        req = ctx.obj['session'].post(calc_content['_links']['tasks'])
+        req.raise_for_status()
+
+
 @cli.group()
 @click.pass_context
 def basis(ctx):
