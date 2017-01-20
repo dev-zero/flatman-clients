@@ -636,7 +636,7 @@ def testresult_generate_results(ctx, update, ids):
 def command(ctx, code, machine):
     """Manage Code Commands"""
     ctx.obj['command_url'] = '{url}/api/v2/codes/{code}/commands/{machine}'.format(
-        **ctx.obj, code=code, machine=machine)
+        code=code, machine=machine, **ctx.obj)
 
     # action is going to happen in the subcommand
     if ctx.invoked_subcommand:
