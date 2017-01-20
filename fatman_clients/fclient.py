@@ -27,6 +27,7 @@ from . import (
 # the maximal number of calculations to fetch details for
 MAX_CALC_DETAILS = 200
 
+
 def validate_basis_set_families(ctx, param, values):
     """Convert and validate basis set families arguments"""
     try:
@@ -611,3 +612,63 @@ def testresult_generate_results(ctx, update, ids):
         req.raise_for_status()
 
     # TODO: implement result parsing and waiting for finish
+
+
+@cli.group(invoke_without_command=True)
+@click.option('--code', type=UUID, required=True)
+@click.option('--machine', type=UUID, required=True)
+@click.pass_context
+def command(ctx, code, machine):
+    """Manage Code Commands"""
+    ctx.obj['command_url'] = '{url}/api/v2/codes/{code}/commands/{machine}'.format(
+        **ctx.obj, code=code, machine=machine)
+
+    # action is going to happen in the subcommand
+    if ctx.invoked_subcommand:
+        return
+
+    req = ctx.obj['session'].get(ctx.obj['command_url'])
+    req.raise_for_status()
+    cmd_content = req.json()
+
+    click.echo("Commands:")
+    for cmd in cmd_content['commands']:
+        click.echo("  - {name}:".format(**cmd))
+        click.echo("      cmd: {cmd}".format(**cmd))
+        click.echo("      args: {args}".format(**cmd))
+
+    click.echo("Environment:")
+
+    click.echo("  Modules:")
+    for module in cmd_content['environment'].get('modules', []):
+        click.echo("    - {}".format(module))
+
+    click.echo("  Variables:")
+    for name, content in cmd_content['environment'].get('variables', {}).items():
+        click.echo("    {}: {}".format(name, content))
+
+
+@command.command('set-cmd')
+@click.argument('name', type=str)
+@click.argument('cmd', type=str)
+@click.pass_context
+def cmd_set_cmd(ctx, name, cmd):
+    """
+    Set the commandline for the given sub-command
+    """
+
+    req = ctx.obj['session'].get(ctx.obj['command_url'])
+    req.raise_for_status()
+    cmd_content = req.json()
+
+    for ccmd in cmd_content['commands']:
+        if ccmd['name'] == name:
+            ccmd['cmd'] = cmd
+            break
+    else:
+        raise RuntimeError("Command '{}' not found".format(name))
+
+    click.echo("Setting command line for '{}' to '{}'..".format(name, cmd), nl=False)
+    req = ctx.obj['session'].post(ctx.obj['command_url'], json=cmd_content)
+    req.raise_for_status()
+    click.echo("done")
