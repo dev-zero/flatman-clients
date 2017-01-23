@@ -421,10 +421,12 @@ def struct(ctx):
               help="Place the structure in the given structure set(s)")
 @click.option('--pbc/--no-pbc', default=True,
               show_default=True, help="Use periodic boundary conditions")
+@click.option('--cubic-cell/--no-cubic-cell', default=False,
+              show_default=True, help="Whether to generate a cubic cell")
 @click.option('--dump/--no-dump', default=False,
               show_default=True, help="Dump the parsed out structure")
 @click.pass_context
-def struct_add(ctx, xyzfile, name, name_prefix, name_field, sets, pbc, dump):
+def struct_add(ctx, xyzfile, name, name_prefix, name_field, sets, pbc, cubic_cell, dump):
     """Upload a structure (in XYZ format)"""
 
     structures = {}
@@ -459,6 +461,7 @@ def struct_add(ctx, xyzfile, name, name_prefix, name_field, sets, pbc, dump):
             'name': name,
             'sets': sets,
             'pbc': pbc,
+            'cubic_cell': cubic_cell,
             'format': 'xyz',
             }
 
