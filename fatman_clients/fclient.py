@@ -493,6 +493,46 @@ def struct_add(ctx, xyzfile, name, name_prefix, name_field, sets, pbc, cubic_cel
         click.echo("succeeded (id: {id})".format(**req.json()))
 
 
+@struct.command('list')
+@click.option('--include-replaced', is_flag=True,
+              default=False, show_default=True,
+              help="show also replaced structures")
+@click.pass_context
+def struct_list(ctx, **filters):
+    """List structures"""
+
+    # filter out filters not specified
+    params = {k: v for k, v in filters.items() if v is not None}
+
+    req = ctx.obj['session'].get(ctx.obj['struct_url'], params=params)
+    req.raise_for_status()
+    structs = req.json()
+
+    table_header = ['id', 'name', 'sets']
+
+    if filters['include_replaced']:
+        table_header += ['replaced_by']
+
+    table_data = [table_header]
+
+    for struc in structs:
+        data = [struc['id'], struc['name'], ', '.join(struc['sets']), ]
+
+        if filters['include_replaced']:
+            if struc['replaced_by']:
+                data += [struc['replaced_by']['id']]
+            else:
+                data += ['']
+
+        table_data.append(data)
+
+    if sys.stdout.isatty():
+        table_instance = SingleTable(table_data)
+    else:
+        table_instance = AsciiTable(table_data)
+    click.echo(table_instance.table)
+
+
 @struct.command('delete')
 @click.argument('struct_ids', metavar='<ID 1> [<ID 2>..]', type=UUID, nargs=-1, required=True)
 @click.pass_context
