@@ -490,7 +490,17 @@ def struct_add(ctx, xyzfile, name, name_prefix, name_field, sets, pbc, cubic_cel
             click.echo("failed")
             raise
 
-        click.echo("succeeded")
+        click.echo("succeeded (id: {id})".format(**req.json()))
+
+
+@struct.command('delete')
+@click.argument('struct_ids', metavar='<ID 1> [<ID 2>..]', type=UUID, nargs=-1, required=True)
+@click.pass_context
+def struct_rm(ctx, struct_ids):
+    """Delete specified structures (if not referenced by any calculation)"""
+    for struct_id in struct_ids:
+        req = ctx.obj['session'].delete(ctx.obj['struct_url'] + '/{}'.format(struct_id))
+        req.raise_for_status()
 
 
 @cli.group()
