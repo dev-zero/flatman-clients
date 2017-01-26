@@ -167,7 +167,7 @@ def calc_add(ctx, structure_set, create_task, settings_file, **data):
             click.echo("succeeded")
 
             for calculation in calculations:
-                click.echo(".. created calculation '{id}' for structure '{structure}'".format(**calculation))
+                click.echo(".. created calculation '{id}' for structure '{structure[name]}'".format(**calculation))
 
             if create_task:
                 for calculation in calculations:
