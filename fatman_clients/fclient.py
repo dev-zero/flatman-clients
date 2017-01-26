@@ -90,6 +90,8 @@ def calc(ctx):
 @click.option('--task/--no-task', 'create_task',
               default=True, show_default=True,
               help="also create a task for this calculation")
+@click.option('--settings', type=str,
+              help="pass additional settings for the calculation (to be specified as a string of JSON)")
 @click.pass_context
 def calc_add(ctx, structure_set, create_task, **data):
     """Create a new calculation on FATMAN.
@@ -132,6 +134,13 @@ def calc_add(ctx, structure_set, create_task, **data):
 
     if structure_set and data['structure']:
         raise click.BadOptionUsage("structure and structure-set can not be specified together")
+
+    if data['settings']:
+        # if settings are specified, load the JSON from the string
+        data['settings'] = json.loads(data['settings'])
+    else:
+        # .. or remove the key completely, since the API does not allow None
+        del(data['settings'])
 
     if structure_set:
         click.echo("Creating calculations.. ", nl=False)
