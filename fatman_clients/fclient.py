@@ -92,8 +92,10 @@ def calc(ctx):
               help="also create a task for this calculation")
 @click.option('--settings', type=str,
               help="pass additional settings for the calculation (to be specified as a string of JSON)")
+@click.option('--settings-file', type=click.File(mode='r'),
+              help="pass additional settings for the calculation using the given JSON file")
 @click.pass_context
-def calc_add(ctx, structure_set, create_task, **data):
+def calc_add(ctx, structure_set, create_task, settings_file, **data):
     """Create a new calculation on FATMAN.
 
     Examples:
@@ -135,12 +137,18 @@ def calc_add(ctx, structure_set, create_task, **data):
     if structure_set and data['structure']:
         raise click.BadOptionUsage("structure and structure-set can not be specified together")
 
+    if settings_file and data['settings']:
+        raise click.BadOptionUsage("settings and settings-file can not be specified together")
+
     if data['settings']:
         # if settings are specified, load the JSON from the string
         data['settings'] = json.loads(data['settings'])
     else:
         # .. or remove the key completely, since the API does not allow None
         del(data['settings'])
+
+    if settings_file:
+        data['settings'] = json.load(settings_file)
 
     if structure_set:
         click.echo("Creating calculations.. ", nl=False)
