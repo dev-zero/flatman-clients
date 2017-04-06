@@ -784,15 +784,42 @@ def cmd_set_cmd(ctx, name, cmd):
               show_default=True, help=("Hide entries completely"
                                        " where one element is unavailable in at least one collection"))
 @click.option('--label', 'labels', type=(UUID, str), multiple=True)
+@click.option('--elements', type=str, help="Only use the specified elements, comma-sep list or range")
+@click.option('--plot-measure', 'plot_measures', type=(float, str), multiple=True,
+              help="Include a horizontal measure line for comparison at the given value using the label")
 @click.pass_context
 def deltatest_comparison(ctx, collections, analysis,
-                         csv_output, plot, hide_missing, labels):
+                         csv_output, plot, hide_missing, labels, elements, plot_measures):
     """Do the deltatest comparison between two given Testresult Collections"""
+
+    from .tools.deltatest import ATOMIC_ELEMENTS
 
     if analysis == 'delta' and len(collections) < 2:
         raise click.BadOptionUsage("Need at least two collections (reference and comparison) to get delta values")
 
     collection_ids = [str(c) for c in collections]
+
+    selected_elements = ATOMIC_ELEMENTS.keys()
+
+    if elements:
+        if '-' in elements:
+            s_element, e_element = elements.split('-', maxsplit=1)
+
+            if (s_element not in ATOMIC_ELEMENTS or
+                    e_element not in ATOMIC_ELEMENTS or
+                    ATOMIC_ELEMENTS[s_element]['num'] >= ATOMIC_ELEMENTS[e_element]['num']):
+                raise click.BadOptionUsage("Invalid elements specified for --elements")
+
+            e_num_range = range(ATOMIC_ELEMENTS[s_element]['num'], ATOMIC_ELEMENTS[e_element]['num']+1)
+
+            selected_elements = [k for k, v in ATOMIC_ELEMENTS.items() if v['num'] in e_num_range]
+
+        else:
+            # split the string by its commas, strip them of whitespaces
+            selected_elements = [s.strip() for s in elements.split(',')]
+            if any(ee not in ATOMIC_ELEMENTS for ee in selected_elements):
+                raise click.BadOptionUsage("Invalid element specified for --elements")
+        # the single element is treated as a one-elemented list in the second case
 
     if analysis == 'delta':
         comparison_url = '{url}/api/v2/comparisons'.format(**ctx.obj)
@@ -841,6 +868,19 @@ def deltatest_comparison(ctx, collections, analysis,
             # fill out the matrix
             deltas[elrows[value['element']]][colcolumns[comp_collection]] = value['delta']
 
+        deltas = [l for l in deltas if l[0] in selected_elements]
+
+        sums = [0.]*ncomparisons
+        available_deltas = [0]*ncomparisons
+        # for each comparison collection
+        for col in range(1, ncomparisons+1):
+            # build a sum over the (available) deltas
+            for entry in deltas:
+                if entry[col] is not None:
+                    sums[col-1] += entry[col]
+                    available_deltas[col-1] += 1
+        averages = [sums[i]/available_deltas[i] for i in range(len(sums))]
+
         if hide_missing:
             # remove lines containing Nones (= missing elements in some collection)
             deltas = [l for l in deltas if None not in l]
@@ -856,6 +896,18 @@ def deltatest_comparison(ctx, collections, analysis,
             else:
                 table_instance = AsciiTable(table_data)
             click.echo(table_instance.table)
+
+
+        stats_table_data = [
+            ['Stat'] + header[1:],
+            ['available elements'] + available_deltas,
+            ['averages'] + averages,
+            ]
+        if sys.stdout.isatty():
+            stats_table_instance = SingleTable(stats_table_data)
+        else:
+            stats_table_instance = AsciiTable(stats_table_data)
+        click.echo(stats_table_instance.table)
 
         if plot:
             import matplotlib.pyplot as plt
@@ -900,6 +952,13 @@ def deltatest_comparison(ctx, collections, analysis,
                 linecoll = matcoll.LineCollection(lines, colors=colors, linestyles=linestyles[colnum % len(linestyles)], linewidths=2)
                 ax.add_collection(linecoll)
 
+            additional_labels = []
+
+            for plot_measure in plot_measures:
+                phandle = ax.axhline(y=plot_measure[0])
+                phandles.append(phandle)
+                additional_labels.append(plot_measure[1])
+
             ax.grid(True, axis='y') # turn the grid on for the y axis since the plot is wide
             ax.tick_params(axis='both', which='both', length=0) # disable all ticks since we have lines and a grid
 
@@ -909,13 +968,12 @@ def deltatest_comparison(ctx, collections, analysis,
             plt.ylabel("∆-value")
             plt.title("Reference: {}".format(cid2cname[reference_collection]))
 
-            plt.legend(phandles, [cid2cname[c] for c in comparison_collections], loc="upper left", scatterpoints=1)
+            plt.legend(phandles, [cid2cname[c] for c in comparison_collections] + additional_labels, loc="upper left", scatterpoints=1)
 
             plt.tight_layout()
             plt.show()
 
     elif analysis == 'condition-number':
-        from .tools.deltatest import ATOMIC_ELEMENTS
 
         trcollections_url = '{url}/api/v2/testresultcollections'.format(**ctx.obj)
 
@@ -960,6 +1018,8 @@ def deltatest_comparison(ctx, collections, analysis,
 
         # strip the key which we only used to avoid the manual lookup
         cond_numbers = list(sorted(cond_numbers.values(), key=lambda l: ATOMIC_ELEMENTS[l[0]]['num']))
+
+        cond_numbers = [l for l in cond_numbers if l[0] in selected_elements]
 
         if hide_missing:
             # remove lines containing Nones (= missing elements in some collection)
