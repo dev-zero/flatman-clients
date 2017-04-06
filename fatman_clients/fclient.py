@@ -767,132 +767,279 @@ def cmd_set_cmd(ctx, name, cmd):
     req.raise_for_status()
     click.echo("done")
 
+
 @cli.command('deltatest-comparison')
-@click.argument('reference_collection', type=UUID)
-@click.argument('comparison_collections', type=UUID, nargs=-1, required=True)
+@click.argument('collections', type=UUID, nargs=-1, required=True)
+@click.option('--analysis', type=click.Choice(['delta', 'condition-number']),
+              default='delta', required=True,
+              help=("use delta to get the ∆-value against reference (= the first collection),"
+                    " or condition-number for the condition-number of the overlap matrix"))
 @click.option('--csv-output', is_flag=True,
               default=False, show_default=True,
               help="output in CSV format")
 @click.option('--plot', is_flag=True,
               default=False, show_default=True,
-              help="generate a plot")
+              help="additional generate plots")
 @click.option('--hide-missing/--no-hide-missing', default=False,
               show_default=True, help=("Hide entries completely"
                                        " where one element is unavailable in at least one collection"))
+@click.option('--label', 'labels', type=(UUID, str), multiple=True)
 @click.pass_context
-def deltatest_comparison(ctx, reference_collection, comparison_collections, csv_output, plot, hide_missing):
+def deltatest_comparison(ctx, collections, analysis,
+                         csv_output, plot, hide_missing, labels):
     """Do the deltatest comparison between two given Testresult Collections"""
-    comparison_url = '{url}/api/v2/comparisons'.format(**ctx.obj)
 
-    collection_ids = [str(c) for c in [reference_collection] + list(comparison_collections)]
-    req = ctx.obj['session'].post(comparison_url,
-                                  json={'metric': "deltatest",
-                                        'testresult_collections': collection_ids})
-    req.raise_for_status()
-    cdata = req.json()
+    if analysis == 'delta' and len(collections) < 2:
+        raise click.BadOptionUsage("Need at least two collections (reference and comparison) to get delta values")
 
-    cid2cname = {c['id']: c['name'] for c in cdata['testresult_collections']}
+    collection_ids = [str(c) for c in collections]
 
-    header = ['element']
-    for collection in comparison_collections:
-        header.append("∆-value\n{}\n<->\n{}".format(cid2cname[str(reference_collection)], cid2cname[str(collection)]))
+    if analysis == 'delta':
+        comparison_url = '{url}/api/v2/comparisons'.format(**ctx.obj)
 
-    ncomparisons = len(comparison_collections)
+        reference_collection = collection_ids[0]
+        comparison_collections = collection_ids[1:]
 
-    deltas = [[el] + [None]*ncomparisons for el in cdata['elements']]
+        req = ctx.obj['session'].post(comparison_url,
+                                      json={'metric': "deltatest",
+                                            'testresult_collections': collection_ids})
+        req.raise_for_status()
+        cdata = req.json()
 
-    # dict to convert element name to row number
-    elrows = {v: k for k, v in enumerate(cdata['elements'])}
-    # ... and the same for the columns
-    colcolumns = {v: k+1 for k, v in enumerate(map(str, comparison_collections))}
+        cid2cname = {c['id']: c['name'] for c in cdata['testresult_collections']}
 
-    for value in cdata['values']:
+        for cid, label in labels:
+            cid2cname[str(cid)] = label
 
-        comp_collection = None
+        header = ['element']
+        for collection in comparison_collections:
+            header.append("∆-value\n{}\n<->\n{}".format(cid2cname[reference_collection], cid2cname[collection]))
 
-        # the API only guarantees that each comparison occurs only once,
-        # but not that the order is maintained
-        if value['collectionA'] == str(reference_collection):
-            comp_collection = value['collectionB']
-        elif value['collectionB'] == str(reference_collection):
-            comp_collection = value['collectionA']
+        ncomparisons = len(comparison_collections)
+
+        deltas = [[el] + [None]*ncomparisons for el in cdata['elements']]
+
+        # dict to convert element name to row number
+        elrows = {v: k for k, v in enumerate(cdata['elements'])}
+        # ... and the same for the columns
+        colcolumns = {v: k+1 for k, v in enumerate(comparison_collections)}
+
+        for value in cdata['values']:
+
+            comp_collection = None
+
+            # the API only guarantees that each comparison occurs only once,
+            # but not that the order is maintained
+            if value['collectionA'] == reference_collection:
+                comp_collection = value['collectionB']
+            elif value['collectionB'] == reference_collection:
+                comp_collection = value['collectionA']
+            else:
+                # ignore comparisons between different comparison_collections returned by the API
+                continue
+
+            # fill out the matrix
+            deltas[elrows[value['element']]][colcolumns[comp_collection]] = value['delta']
+
+        if hide_missing:
+            # remove lines containing Nones (= missing elements in some collection)
+            deltas = [l for l in deltas if None not in l]
+
+        table_data = [header] + deltas
+
+        if csv_output:
+            writer = csv.writer(sys.stdout)
+            writer.writerows(table_data)
         else:
-            # ignore comparisons between different comparison_collections returned by the API
-            continue
+            if sys.stdout.isatty():
+                table_instance = SingleTable(table_data)
+            else:
+                table_instance = AsciiTable(table_data)
+            click.echo(table_instance.table)
 
-        # fill out the matrix
-        deltas[elrows[value['element']]][colcolumns[comp_collection]] = value['delta']
+        if plot:
+            import matplotlib.pyplot as plt
+            import matplotlib.collections as matcoll
+            import matplotlib.cm as cm
+            import numpy as np
 
-    if hide_missing:
-        # remove lines containing Nones (= missing elements in some collection)
-        deltas = [l for l in deltas if None not in l]
+            deltas = np.array(deltas)
+            elements = deltas[:,0]
+            nelements = len(elements)
 
-    table_data = [header] + deltas
+            syms = ['o', '^', 's', 'v', 'p', 'D']
+            linestyles = ['dotted', 'dashdot', 'dashed', 'solid']
 
-    if csv_output:
-        writer = csv.writer(sys.stdout)
-        writer.writerows(table_data)
-    else:
-        if sys.stdout.isatty():
-            table_instance = SingleTable(table_data)
+            # the elements are already sorted by atomic number,
+            # but we don't want the transition metals gap in the plot
+            numbers = np.arange(1, nelements+1)
+
+            fig = plt.figure(figsize=(11.69,8.27))
+            ax = fig.add_subplot(111)
+
+            if ncomparisons > 1:
+                shifts = np.linspace(-0.25, 0.25, ncomparisons)
+            else:
+                shifts = [0.]
+
+            cmap = plt.get_cmap("gnuplot")
+            colors = [cmap(0.8*i/nelements) for i in range(nelements)]
+
+            phandles = []
+
+            for colnum in range(ncomparisons):
+                x = numbers + shifts[colnum]
+                y = deltas[:,colnum+1]
+
+                phandle = ax.scatter(x, y, color=colors, marker=syms[colnum])
+                phandles.append(phandle)
+
+                lines = []
+                for idx in range(len(x)):
+                    lines.append([(x[idx],0), (x[idx], y[idx])]) # for each datapoint add a list of pairs (start and endpoint)
+                linecoll = matcoll.LineCollection(lines, colors=colors, linestyles=linestyles[colnum % len(linestyles)], linewidths=2)
+                ax.add_collection(linecoll)
+
+            ax.grid(True, axis='y') # turn the grid on for the y axis since the plot is wide
+            ax.tick_params(axis='both', which='both', length=0) # disable all ticks since we have lines and a grid
+
+            plt.xlim(0, numbers[-1]+1) # set the minimum to 0 to get some space on the left
+            plt.ylim(0) # no point in wasting space below 0
+            plt.xticks(numbers, elements) # use elements instead of atomic numbers
+            plt.ylabel("∆-value")
+            plt.title("Reference: {}".format(cid2cname[reference_collection]))
+
+            plt.legend(phandles, [cid2cname[c] for c in comparison_collections], loc="upper left", scatterpoints=1)
+
+            plt.tight_layout()
+            plt.show()
+
+    elif analysis == 'condition-number':
+        from .tools.deltatest import ATOMIC_ELEMENTS
+
+        trcollections_url = '{url}/api/v2/testresultcollections'.format(**ctx.obj)
+
+        req = ctx.obj['session'].get(trcollections_url)
+        req.raise_for_status()
+        cdata = req.json()
+
+        cid2cname = {c['id']: c['name'] for c in cdata if c['id'] in collection_ids}
+
+        for cid, label in labels:
+            cid2cname[str(cid)] = label
+
+        header = ['element'] + [cid2cname[cid] for cid in collection_ids]
+        ncollections = len(collection_ids)
+
+        # map collection IDs to colum numbers:
+        colcolumns = {v: k+1 for k, v in enumerate(collection_ids)}
+
+        cond_numbers = {}
+
+        for coll_id in collection_ids:
+            trcollection_url = '{url}/api/v2/testresultcollections/{trcid}'.format(trcid=coll_id, **ctx.obj)
+
+            req = ctx.obj['session'].get(trcollection_url)
+            req.raise_for_status()
+            trcdata = req.json()
+
+            for tresult in trcdata['testresults']:
+                element = tresult.get('data', {}).get('element')
+                condnum = tresult.get('data', {}).get('overlap_matrix_condition_number@V0')
+
+                # ignore invalid deltatest data
+                if element is None or condnum is None:
+                    print(tresult.get('data'))
+                    continue
+
+                # create an empty list for that element in the dictionary if not already present
+                if element not in cond_numbers:
+                    cond_numbers[element] = [element] + [None]*ncollections
+
+                cond_numbers[element][colcolumns[coll_id]] = condnum['1-norm (estimate)']['Log(CN)']
+
+        # strip the key which we only used to avoid the manual lookup
+        cond_numbers = list(sorted(cond_numbers.values(), key=lambda l: ATOMIC_ELEMENTS[l[0]]['num']))
+
+        if hide_missing:
+            # remove lines containing Nones (= missing elements in some collection)
+            cond_numbers = [l for l in cond_numbers if None not in l]
+
+        table_data = [header] + cond_numbers
+
+        print(table_data)
+
+        if csv_output:
+            writer = csv.writer(sys.stdout)
+            writer.writerows(table_data)
         else:
-            table_instance = AsciiTable(table_data)
-        click.echo(table_instance.table)
+            if sys.stdout.isatty():
+                table_instance = SingleTable(table_data)
+            else:
+                table_instance = AsciiTable(table_data)
+            click.echo(table_instance.table)
 
-    if plot:
-        import matplotlib.pyplot as plt
-        import matplotlib.collections as matcoll
-        import matplotlib.cm as cm
-        import numpy as np
+        if plot:
+            import matplotlib.pyplot as plt
+            import matplotlib.collections as matcoll
+            import matplotlib.cm as cm
+            import numpy as np
 
-        deltas = np.array(deltas)
-        elements = deltas[:,0]
-        nelements = len(elements)
+            condnums = np.array(cond_numbers)
+            elements = condnums[:,0]
+            nelements = len(elements)
 
-        syms = ['.', '^', 'x', 's', '+', '*']
-        linestyles = ['dotted', 'dashdot', 'dashed', 'solid']
-        colors = ['purple', 'limegreen', 'indianred']
+            syms = ['o', '^', 's', 'v', 'p', 'D']
+            linestyles = ['dotted', 'dashdot', 'dashed', 'solid']
 
-        # the elements are already sorted by atomic number,
-        # but we don't want the transition metals gap in the plot
-        numbers = np.arange(1, nelements+1)
+            # the elements are already sorted by atomic number,
+            # but we don't want the transition metals gap in the plot
+            numbers = np.arange(1, nelements+1)
 
-        fig = plt.figure(figsize=(11.69,8.27))
-        ax = fig.add_subplot(111)
+            fig = plt.figure(figsize=(11.69,8.27))
+            ax = fig.add_subplot(111)
 
-        if ncomparisons > 1:
-            shifts = np.linspace(-0.25, 0.25, ncomparisons)
-        else:
-            shifts = [0.]
+            if ncollections > 1:
+                shifts = np.linspace(-0.25, 0.25, ncollections)
+            else:
+                shifts = [0.]
 
-        cmap = plt.get_cmap("gnuplot")
-        colors = [cmap(0.8*i/nelements) for i in range(nelements)]
+            cmap = plt.get_cmap("gnuplot")
+            colors = [cmap(0.8*i/nelements) for i in range(nelements)]
 
-        phandles = []
+            phandles = []
 
-        for colnum in range(ncomparisons):
-            x = numbers + shifts[colnum]
-            y = deltas[:,colnum+1]
+            for colnum in range(ncollections):
+                x = numbers + shifts[colnum]
+                y = condnums[:,colnum+1]
 
-            phandle = ax.scatter(x, y, color=colors, marker=syms[colnum])
-            phandles.append(phandle)
+                phandle = ax.scatter(x, y, color=colors, marker=syms[colnum], zorder=10)
+                phandles.append(phandle)
 
-            lines = []
-            for idx in range(len(x)):
-                lines.append([(x[idx],0), (x[idx], y[idx])]) # for each datapoint add a list of pairs (start and endpoint)
-            linecoll = matcoll.LineCollection(lines, colors=colors, linestyles=linestyles[colnum % len(linestyles)])
-            ax.add_collection(linecoll)
+                lines = []
+                for idx in range(len(x)):
+                    lines.append([(x[idx],0), (x[idx], y[idx])]) # for each datapoint add a list of pairs (start and endpoint)
+                linecoll = matcoll.LineCollection(lines, colors=colors, linestyles=linestyles[colnum % len(linestyles)], linewidths=2, zorder=8)
+                ax.add_collection(linecoll)
 
-        ax.grid(True, axis='y') # turn the grid on for the y axis since the plot is wide
-        ax.tick_params(axis='both', which='both', length=0) # disable all ticks since we have lines and a grid
+            ax.grid(True, axis='y') # turn the grid on for the y axis since the plot is wide
+            ax.tick_params(axis='both', which='both', length=0) # disable all ticks since we have lines and a grid
 
-        plt.xlim(0, numbers[-1]+1) # set the minimum to 0 to get some space on the left
-        plt.ylim(0) # no point in wasting space below 0
-        plt.xticks(numbers, elements) # use elements instead of atomic numbers
-        plt.ylabel("∆-value")
-        plt.title("Reference: {}".format(cid2cname[str(reference_collection)]))
+            maxcondnum = max(filter(None, condnums[:,1:].flatten()))
 
-        plt.legend(phandles, [cid2cname[str(c)] for c in comparison_collections], loc="upper left", scatterpoints=1)
+            stable_span = ax.axhspan(0, 7., facecolor='limegreen', alpha=0.5, zorder=5)
+            critical_span = ax.axhspan(7., 10., facecolor='yellow', alpha=0.5, zorder=5)
+            unstable_span = ax.axhspan(10., max(12., maxcondnum*1.1), facecolor='red', alpha=0.5, zorder=5)
+            ax.text(nelements+1, 3.5, "stable", ha="right", va="center", rotation=90, color="black", zorder=10)
+            ax.text(nelements+1, 8.5, "critical", ha="right", va="center", rotation=90, color="black", zorder=10)
+            ax.text(nelements+1, 11, "unstable", ha="right", va="center", rotation=90, color="black", zorder=10)
 
-        plt.tight_layout()
-        plt.show()
+            plt.xlim(0, numbers[-1]+1) # set the min/max to 0/last-element+1 to get some space on the left and right
+            plt.ylim(0, max(12., maxcondnum*1.1)) # no point in wasting space below 0 or above the max
+            plt.xticks(numbers, elements) # use elements instead of atomic numbers
+            plt.ylabel("Overlap Matrix Condition Number (log)")
+
+            plt.legend(phandles, [cid2cname[c] for c in collection_ids], loc="upper left", scatterpoints=1)
+
+            plt.tight_layout()
+            plt.show()
