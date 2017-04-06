@@ -787,9 +787,10 @@ def cmd_set_cmd(ctx, name, cmd):
 @click.option('--elements', type=str, help="Only use the specified elements, comma-sep list or range")
 @click.option('--plot-measure', 'plot_measures', type=(float, str), multiple=True,
               help="Include a horizontal measure line for comparison at the given value using the label")
+@click.option('--save-plot', type=click.Path(exists=False))
 @click.pass_context
 def deltatest_comparison(ctx, collections, analysis,
-                         csv_output, plot, hide_missing, labels, elements, plot_measures):
+                         csv_output, plot, hide_missing, labels, elements, plot_measures, save_plot):
     """Do the deltatest comparison between two given Testresult Collections"""
 
     from .tools.deltatest import ATOMIC_ELEMENTS
@@ -971,7 +972,11 @@ def deltatest_comparison(ctx, collections, analysis,
             plt.legend(phandles, [cid2cname[c] for c in comparison_collections] + additional_labels, loc="upper left", scatterpoints=1)
 
             plt.tight_layout()
-            plt.show()
+
+            if save_plot:
+                plt.savefig(save_plot)
+            else:
+                plt.show()
 
     elif analysis == 'condition-number':
 
@@ -1102,4 +1107,8 @@ def deltatest_comparison(ctx, collections, analysis,
             plt.legend(phandles, [cid2cname[c] for c in collection_ids], loc="upper left", scatterpoints=1)
 
             plt.tight_layout()
-            plt.show()
+
+            if save_plot:
+                plt.savefig(save_plot)
+            else:
+                plt.show()
