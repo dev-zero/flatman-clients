@@ -358,12 +358,15 @@ def basis_add(ctx, basisset_file, dump_basis):
     basissets = {}
     current_basis = None
 
+    EMPTY_LINE = re.compile(r'^(\s*|\s*#.*)$')
+    BLOCK_DEFINITION = re.compile(r'^\s*(?P<element>[a-zA-Z]{1,2})\s+(?P<family>\S+).*\n')
+
     for line in basisset_file:
-        if re.match(r'\s*#.*', line):
-            # ignore comment lines
+        if EMPTY_LINE.match(line):
+            # ignore empty and comment lines
             continue
 
-        match = re.match(r'\s*(?P<element>[a-zA-Z]{1,2})\s+(?P<family>\S+).*', line)
+        match = BLOCK_DEFINITION.match(line)
 
         if match:
             if current_basis and dump_basis:
