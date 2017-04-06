@@ -94,6 +94,9 @@ def calc(ctx):
               help="pass additional settings for the calculation (to be specified as a string of JSON)")
 @click.option('--settings-file', type=click.File(mode='r'),
               help="pass additional settings for the calculation using the given JSON file")
+@click.option('--ignore-failed/--no-ignore-failed',
+              default=False, show_default=True,
+              help="Ignore failure in creation of single calculations (likely caused by missing basis set or pseudo)")
 @click.pass_context
 def calc_add(ctx, structure_set, create_task, settings_file, **data):
     """Create a new calculation on FATMAN.
