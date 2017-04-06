@@ -1061,7 +1061,7 @@ def deltatest_comparison(ctx, collections, analysis,
             # but we don't want the transition metals gap in the plot
             numbers = np.arange(1, nelements+1)
 
-            fig = plt.figure(figsize=(11.69,8.27))
+            fig = plt.figure(figsize=(20, 6))
             ax = fig.add_subplot(111)
 
             if ncollections > 1:
@@ -1109,6 +1109,6 @@ def deltatest_comparison(ctx, collections, analysis,
             plt.tight_layout()
 
             if save_plot:
-                plt.savefig(save_plot)
+                plt.savefig(save_plot, dpi=100)
             else:
                 plt.show()
