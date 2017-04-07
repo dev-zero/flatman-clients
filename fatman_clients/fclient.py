@@ -770,7 +770,7 @@ def cmd_set_cmd(ctx, name, cmd):
 
 @cli.command('deltatest-comparison')
 @click.argument('collections', type=UUID, nargs=-1, required=True)
-@click.option('--analysis', type=click.Choice(['delta', 'condition-number']),
+@click.option('--analysis', type=click.Choice(['delta', 'condition-number', 'evcurves']),
               default='delta', required=True,
               help=("use delta to get the ∆-value against reference (= the first collection),"
                     " or condition-number for the condition-number of the overlap matrix"))
@@ -788,15 +788,21 @@ def cmd_set_cmd(ctx, name, cmd):
 @click.option('--plot-measure', 'plot_measures', type=(float, str), multiple=True,
               help="Include a horizontal measure line for comparison at the given value using the label")
 @click.option('--save-plot', type=click.Path(exists=False))
+@click.option('--plot-ylimit', type=float, help="Limit the y-axis to the given value")
+@click.option('--plot-columns', type=int, default=2, help="Number of columns for the E(V)-curve analysis")
 @click.pass_context
 def deltatest_comparison(ctx, collections, analysis,
-                         csv_output, plot, hide_missing, labels, elements, plot_measures, save_plot):
+                         csv_output, plot, hide_missing, labels, elements,
+                         plot_measures, save_plot, plot_ylimit, plot_columns):
     """Do the deltatest comparison between two given Testresult Collections"""
 
     from .tools.deltatest import ATOMIC_ELEMENTS
 
     if analysis == 'delta' and len(collections) < 2:
         raise click.BadOptionUsage("Need at least two collections (reference and comparison) to get delta values")
+
+    if analysis == 'evcurves' and not plot:
+        raise click.BadOptionUsage("The evcurve analysis consists only of plots")
 
     collection_ids = [str(c) for c in collections]
 
@@ -964,7 +970,11 @@ def deltatest_comparison(ctx, collections, analysis,
             ax.tick_params(axis='both', which='both', length=0) # disable all ticks since we have lines and a grid
 
             plt.xlim(0, numbers[-1]+1) # set the minimum to 0 to get some space on the left
-            plt.ylim(0) # no point in wasting space below 0
+            plt.ylim(ymin=0) # no point in wasting space below 0
+
+            if plot_ylimit:
+                plt.ylim(ymax=plot_ylimit)
+
             plt.xticks(numbers, elements) # use elements instead of atomic numbers
             plt.ylabel("∆-value")
             plt.title("Reference: {}".format(cid2cname[reference_collection]))
@@ -1112,3 +1122,59 @@ def deltatest_comparison(ctx, collections, analysis,
                 plt.savefig(save_plot, dpi=100)
             else:
                 plt.show()
+
+    elif analysis == 'evcurves':
+        import math
+        import matplotlib.pyplot as plt
+        import numpy as np
+        from .tools.deltatest import eos
+
+
+        # it would be sufficient to get each testcollection instead,
+        # but here we already have the list of all available elements
+        comparison_url = '{url}/api/v2/comparisons'.format(**ctx.obj)
+
+        req = ctx.obj['session'].post(comparison_url,
+                                      json={'metric': "deltatest",
+                                            'testresult_collections': collection_ids})
+        req.raise_for_status()
+        cdata = req.json()
+
+        cid2cname = {c['id']: c['name'] for c in cdata['testresult_collections']}
+
+        for cid, label in labels:
+            cid2cname[str(cid)] = label
+
+        ncollections = len(collections)
+
+        trcdata = {c['id']: {r['data']['element']: r['data'] for r in  c['testresults'] if 'element' in r['data']} for c in cdata['testresult_collections']}
+
+        elements = [e for e in cdata['elements'] if e in selected_elements]
+
+        prows = math.ceil(len(elements)/plot_columns)
+
+        fig, axarr = plt.subplots(prows, plot_columns)
+
+        if plot_columns == 1:
+            axarr = np.array([axarr])
+
+        axarr = axarr.flatten()
+
+        for el_num, element in enumerate(elements):
+            for cid in collection_ids:
+                try:
+                    coeffs = trcdata[cid][element]['coefficients']
+                except KeyError:
+                    continue
+
+                xfit, yfit = eos(coeffs['V'], coeffs['B0'], coeffs['B1'])
+                axarr[el_num].plot(xfit, yfit, label=cid2cname[cid])
+                axarr[el_num].set_title(element)
+                axarr[el_num].legend(loc="upper center")
+
+        plt.tight_layout()
+
+        if save_plot:
+            plt.savefig(save_plot, dpi=100)
+        else:
+            plt.show()
