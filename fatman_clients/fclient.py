@@ -790,10 +790,13 @@ def cmd_set_cmd(ctx, name, cmd):
 @click.option('--save-plot', type=click.Path(exists=False))
 @click.option('--plot-ylimit', type=float, help="Limit the y-axis to the given value")
 @click.option('--plot-columns', type=int, default=2, help="Number of columns for the E(V)-curve analysis")
+@click.option('--plot-width', type=float, default=11.69, show_default=True, help="Plot width in inches")
+@click.option('--plot-height', type=float, default=8.27, show_default=True, help="Plot height in inches")
 @click.pass_context
 def deltatest_comparison(ctx, collections, analysis,
                          csv_output, plot, hide_missing, labels, elements,
-                         plot_measures, save_plot, plot_ylimit, plot_columns):
+                         plot_measures, save_plot, plot_ylimit, plot_columns,
+                         plot_width, plot_height):
     """Do the deltatest comparison between two given Testresult Collections"""
 
     from .tools.deltatest import ATOMIC_ELEMENTS
@@ -917,6 +920,7 @@ def deltatest_comparison(ctx, collections, analysis,
         click.echo(stats_table_instance.table)
 
         if plot:
+            import matplotlib as mpl
             import matplotlib.pyplot as plt
             import matplotlib.collections as matcoll
             import matplotlib.cm as cm
@@ -926,6 +930,15 @@ def deltatest_comparison(ctx, collections, analysis,
             elements = deltas[:,0]
             nelements = len(elements)
 
+            plt.style.use('ggplot')
+            mpl.rcParams.update({
+                'xtick.labelsize': 16 if nelements < 20 else 14,
+                'ytick.labelsize': 16,
+                'axes.labelsize': 16,
+                'lines.linewidth': 1,
+                'font.weight': 'bold',
+                })
+
             syms = ['o', '^', 's', 'v', 'p', 'D']
             linestyles = ['dotted', 'dashdot', 'dashed', 'solid']
 
@@ -933,7 +946,7 @@ def deltatest_comparison(ctx, collections, analysis,
             # but we don't want the transition metals gap in the plot
             numbers = np.arange(1, nelements+1)
 
-            fig = plt.figure(figsize=(11.69,8.27))
+            fig = plt.figure(figsize=(plot_width, plot_height))
             ax = fig.add_subplot(111)
 
             if ncomparisons > 1:
@@ -950,7 +963,7 @@ def deltatest_comparison(ctx, collections, analysis,
                 x = numbers + shifts[colnum]
                 y = deltas[:,colnum+1]
 
-                phandle = ax.scatter(x, y, color=colors, marker=syms[colnum])
+                phandle = ax.scatter(x, y, color=colors, marker=syms[colnum], s=50)
                 phandles.append(phandle)
 
                 lines = []
@@ -977,7 +990,7 @@ def deltatest_comparison(ctx, collections, analysis,
 
             plt.xticks(numbers, elements) # use elements instead of atomic numbers
             plt.ylabel("∆-value")
-            plt.title("Reference: {}".format(cid2cname[reference_collection]))
+            #plt.title("Reference: {}".format(cid2cname[reference_collection]))
 
             plt.legend(phandles, [cid2cname[c] for c in comparison_collections] + additional_labels, loc="upper left", scatterpoints=1)
 
@@ -1055,6 +1068,7 @@ def deltatest_comparison(ctx, collections, analysis,
             click.echo(table_instance.table)
 
         if plot:
+            import matplotlib as mpl
             import matplotlib.pyplot as plt
             import matplotlib.collections as matcoll
             import matplotlib.cm as cm
@@ -1064,6 +1078,15 @@ def deltatest_comparison(ctx, collections, analysis,
             elements = condnums[:,0]
             nelements = len(elements)
 
+            plt.style.use('ggplot')
+            mpl.rcParams.update({
+                'xtick.labelsize': 16 if nelements < 20 else 14,
+                'ytick.labelsize': 16,
+                'axes.labelsize': 16,
+                'lines.linewidth': 1,
+                'font.weight': 'bold',
+                })
+
             syms = ['o', '^', 's', 'v', 'p', 'D']
             linestyles = ['dotted', 'dashdot', 'dashed', 'solid']
 
@@ -1071,7 +1094,7 @@ def deltatest_comparison(ctx, collections, analysis,
             # but we don't want the transition metals gap in the plot
             numbers = np.arange(1, nelements+1)
 
-            fig = plt.figure(figsize=(20, 6))
+            fig = plt.figure(figsize=(plot_width, plot_height))
             ax = fig.add_subplot(111)
 
             if ncollections > 1:
