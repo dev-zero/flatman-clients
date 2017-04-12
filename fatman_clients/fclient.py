@@ -71,6 +71,7 @@ def cli(ctx, url, ssl_verify):
 def calc(ctx):
     """Manage calculations"""
     ctx.obj['calc_url'] = '{url}/api/v2/calculations'.format(**ctx.obj)
+    ctx.obj['calc_coll_url'] = '{url}/api/v2/calculationcollections'.format(**ctx.obj)
     ctx.obj['structureset_url'] = '{url}/api/v2/structuresets'.format(**ctx.obj)
 
 
@@ -152,6 +153,17 @@ def calc_add(ctx, structure_set, create_task, settings_file, **data):
 
     if settings_file:
         data['settings'] = json.load(settings_file)
+
+    req = ctx.obj['session'].get(ctx.obj['calc_coll_url'])
+    req.raise_for_status()
+    calc_colls = req.json()
+
+    if data['collection'] not in [c['name'] for c in calc_colls]:
+        click.confirm("The specified collection '{collection}' does not exist. Do you want to create it?".format(**data), abort=True)
+        coll_desc = click.prompt("Please enter a description for the collection", type=str)
+        req = ctx.obj['session'].post(ctx.obj['calc_coll_url'], json={'name': data['collection'], 'desc': coll_desc})
+        req.raise_for_status()
+        # since we pass the collection name when creating the calculation, we can forget about the id of the created collection
 
     if structure_set:
         click.echo("Creating calculations.. ", nl=False)
