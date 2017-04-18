@@ -1047,7 +1047,7 @@ def deltatest_comparison(ctx, collections, analysis,
 
                 # ignore invalid deltatest data
                 if element is None or condnum is None:
-                    print(tresult.get('data'))
+                    print("Ignoring:", tresult.get('data'))
                     continue
 
                 # create an empty list for that element in the dictionary if not already present
@@ -1066,8 +1066,6 @@ def deltatest_comparison(ctx, collections, analysis,
             cond_numbers = [l for l in cond_numbers if None not in l]
 
         table_data = [header] + cond_numbers
-
-        print(table_data)
 
         if csv_output:
             writer = csv.writer(sys.stdout)
