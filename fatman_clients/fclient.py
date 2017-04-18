@@ -1084,8 +1084,10 @@ def deltatest_comparison(ctx, collections, analysis,
             import matplotlib.cm as cm
             import numpy as np
 
-            condnums = np.array(cond_numbers)
-            elements = condnums[:,0]
+            # unpack the cond_numbers list of lists manually to get
+            # a proper NumPy array of values to get reliable conversion
+            condnums = np.array([l[1:] for l in cond_numbers])
+            elements = [l[0] for l in cond_numbers]
             nelements = len(elements)
 
             plt.style.use('ggplot')
@@ -1119,7 +1121,7 @@ def deltatest_comparison(ctx, collections, analysis,
 
             for colnum in range(ncollections):
                 x = numbers + shifts[colnum]
-                y = condnums[:,colnum+1]
+                y = condnums[:,colnum]
 
                 phandle = ax.scatter(x, y, color=colors, marker=syms[colnum], zorder=10)
                 phandles.append(phandle)
@@ -1133,8 +1135,7 @@ def deltatest_comparison(ctx, collections, analysis,
             ax.grid(True, axis='y') # turn the grid on for the y axis since the plot is wide
             ax.tick_params(axis='both', which='both', length=0) # disable all ticks since we have lines and a grid
 
-            maxcondnum = max(filter(None, condnums[:,1:].flatten()))
-
+            maxcondnum = max(filter(None, condnums.flatten()))
             stable_span = ax.axhspan(0, 7., facecolor='limegreen', alpha=0.5, zorder=5)
             critical_span = ax.axhspan(7., 10., facecolor='yellow', alpha=0.5, zorder=5)
             unstable_span = ax.axhspan(10., max(12., maxcondnum*1.1), facecolor='red', alpha=0.5, zorder=5)
