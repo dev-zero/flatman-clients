@@ -121,6 +121,8 @@ ATOMIC_ELEMENTS = {
   }
 
 
+NUM2SYM = {e['num']: e['sym'] for e in ATOMIC_ELEMENTS.values()}
+
 def eos(V0, B0, B1, E0=0.):
     import numpy as np
 

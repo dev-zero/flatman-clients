@@ -45,6 +45,13 @@ def json_pretty_dumps(orig):
                       indent=4, separators=(',', ': '))
 
 
+def get_table_instance(table_data):
+    if sys.stdout.isatty():
+        return SingleTable(table_data)
+    else:
+        return AsciiTable(table_data)
+
+
 @click.group()
 @click.option('--url', type=str,
               default='https://tctdb.chem.uzh.ch/fatman', show_default=True,
@@ -567,6 +574,49 @@ def struct_list(ctx, **filters):
     else:
         table_instance = AsciiTable(table_data)
     click.echo(table_instance.table)
+
+
+@struct.command('show')
+@click.argument('structure_id', metavar='<ID>', type=UUID, required=True)
+@click.pass_context
+def struct_show(ctx, structure_id):
+    """Show structure"""
+
+    from .tools.deltatest import NUM2SYM
+
+    req = ctx.obj['session'].get(ctx.obj['struct_url'] + '/%s' % structure_id)
+    req.raise_for_status()
+    struct = req.json()
+
+    data = OrderedDict()
+
+    data['Name'] = struct['name']
+    data['Sets'] = ", ".join(struct['sets'])
+    data['Replaced by'] = struct['replaced_by']
+
+    ase_struct = json.loads(struct['ase_structure'])
+
+    if 'pbc' in ase_struct:
+        data['PBC'] = "".join(axis*enabled for axis, enabled in zip("XYZ", ase_struct['pbc']))
+        if not data['PBC']:
+            data['PBC'] = "(none)"
+
+    if 'cell' in ase_struct:
+        data['Cell'] = "\n".join(["{:.4f} {:8.4f} {:8.4f}".format(*v) for v in ase_struct['cell']])
+
+    data['Atoms'] = "\n".join(
+        "{:4} {:.4f} {:8.4f} {:8.4f}".format(NUM2SYM[e[0]], *e[1])
+        for e in zip(ase_struct['numbers'], ase_struct['positions']))
+
+    if 'initial_magmoms' in ase_struct:
+        data['Init. Magn. Moments'] = " ".join(map("{:.2}".format, ase_struct['initial_magmoms']))
+
+    if 'kpoints' in ase_struct['key_value_pairs']:
+        data['K-Points'] = " ".join(map(str, ase_struct['key_value_pairs']['kpoints']))
+
+    table = get_table_instance([[k, v] for k, v in data.items()])
+    table.inner_heading_row_border = False
+    click.echo(table.table)
 
 
 @struct.command('delete')
