@@ -599,10 +599,9 @@ def struct_show(ctx, structure_id):
     if 'pbc' in ase_struct:
         data['PBC'] = "".join(axis*enabled for axis, enabled in zip("XYZ", ase_struct['pbc']))
         if not data['PBC']:
-            data['PBC'] = "(none)"
+            data['PBC'] = None
 
-    if 'cell' in ase_struct:
-        data['Cell'] = "\n".join(["{:.4f} {:8.4f} {:8.4f}".format(*v) for v in ase_struct['cell']])
+    data['Cell'] = "\n".join(["{:.4f} {:8.4f} {:8.4f}".format(*v) for v in ase_struct['cell']])
 
     data['Atoms'] = "\n".join(
         "{:4} {:.4f} {:8.4f} {:8.4f}".format(NUM2SYM[e[0]], *e[1])
@@ -610,9 +609,13 @@ def struct_show(ctx, structure_id):
 
     if 'initial_magmoms' in ase_struct:
         data['Init. Magn. Moments'] = " ".join(map("{:.2}".format, ase_struct['initial_magmoms']))
+    else:
+        data['Init. Magn. Moments'] = None
 
     if 'kpoints' in ase_struct['key_value_pairs']:
         data['K-Points'] = " ".join(map(str, ase_struct['key_value_pairs']['kpoints']))
+    else:
+        data['K-Points'] = None
 
     table = get_table_instance([[k, v] for k, v in data.items()])
     table.inner_heading_row_border = False
