@@ -157,7 +157,7 @@ def calc_add(ctx, structure_set, create_task, settings_file, **data):
         data['settings'] = json.loads(data['settings'])
     else:
         # .. or remove the key completely, since the API does not allow None
-        del(data['settings'])
+        del data['settings']
 
     if settings_file:
         data['settings'] = json.load(settings_file)
@@ -167,11 +167,13 @@ def calc_add(ctx, structure_set, create_task, settings_file, **data):
     calc_colls = req.json()
 
     if data['collection'] not in [c['name'] for c in calc_colls]:
-        click.confirm("The specified collection '{collection}' does not exist. Do you want to create it?".format(**data), abort=True)
+        click.confirm("The specified collection '{collection}' does not exist. Do you want to create it?".format(**data),
+                      abort=True)
         coll_desc = click.prompt("Please enter a description for the collection", type=str)
         req = ctx.obj['session'].post(ctx.obj['calc_coll_url'], json={'name': data['collection'], 'desc': coll_desc})
         req.raise_for_status()
-        # since we pass the collection name when creating the calculation, we can forget about the id of the created collection
+        # since we pass the collection name when creating the calculation,
+        # we can forget about the id of the created collection
 
     if structure_set:
         click.echo("Creating calculations.. ", nl=False)
@@ -1177,7 +1179,7 @@ def deltatest_comparison(ctx, collections, analysis,
             import numpy as np
 
             deltas = np.array(deltas)
-            elements = deltas[:,0]
+            elements = deltas[:, 0]
             nelements = len(elements)
 
             plt.style.use('ggplot')
@@ -1211,14 +1213,14 @@ def deltatest_comparison(ctx, collections, analysis,
 
             for colnum in range(ncomparisons):
                 x = numbers + shifts[colnum]
-                y = deltas[:,colnum+1]
+                y = deltas[:, colnum+1]
 
                 phandle = ax.scatter(x, y, color=colors, marker=syms[colnum], s=50)
                 phandles.append(phandle)
 
                 lines = []
                 for idx in range(len(x)):
-                    lines.append([(x[idx],0), (x[idx], y[idx])]) # for each datapoint add a list of pairs (start and endpoint)
+                    lines.append([(x[idx], 0), (x[idx], y[idx])]) # for each datapoint add a list of pairs (start and endpoint)
                 linecoll = matcoll.LineCollection(lines, colors=colors, linestyles=linestyles[colnum % len(linestyles)], linewidths=2)
                 ax.add_collection(linecoll)
 
@@ -1359,14 +1361,14 @@ def deltatest_comparison(ctx, collections, analysis,
 
             for colnum in range(ncollections):
                 x = numbers + shifts[colnum]
-                y = condnums[:,colnum]
+                y = condnums[:, colnum]
 
                 phandle = ax.scatter(x, y, color=colors, marker=syms[colnum], zorder=10)
                 phandles.append(phandle)
 
                 lines = []
                 for idx in range(len(x)):
-                    lines.append([(x[idx],0), (x[idx], y[idx])]) # for each datapoint add a list of pairs (start and endpoint)
+                    lines.append([(x[idx], 0), (x[idx], y[idx])]) # for each datapoint add a list of pairs (start and endpoint)
                 linecoll = matcoll.LineCollection(lines, colors=colors, linestyles=linestyles[colnum % len(linestyles)], linewidths=2, zorder=8)
                 ax.add_collection(linecoll)
 
