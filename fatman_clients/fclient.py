@@ -629,7 +629,64 @@ def struct_rm(ctx, struct_ids):
     """Delete specified structures (if not referenced by any calculation)"""
     for struct_id in struct_ids:
         req = ctx.obj['session'].delete(ctx.obj['struct_url'] + '/{}'.format(struct_id))
+
+
+@cli.group()
+@click.pass_context
+def structureset(ctx):
+    """Manage structure sets"""
+    ctx.obj['structureset_url'] = '{url}/api/v2/structuresets'.format(**ctx.obj)
+
+
+@structureset.command('add')
+@click.argument('name', type=str)
+@click.option('--desc', type=str,
+              help="Optional description")
+@click.option('--superset', type=str,
+              help="Optional name of a super set")
+@click.pass_context
+def structureset_add(ctx, **data):
+    """Create a new structure set"""
+
+    try:
+        req = ctx.obj['session'].post(ctx.obj['structureset_url'], data=data)
         req.raise_for_status()
+    except requests.exceptions.HTTPError as exc:
+        click.echo("failed")
+        try:
+            msgs = exc.response.json()
+
+            # try to extract the error message
+            if isinstance(msgs, dict) and 'errors' in msgs.keys():
+                ctx.fail(json_pretty_dumps(msgs['errors']))
+
+            ctx.fail(json_pretty_dumps(msgs))
+        except (ValueError, KeyError):
+            ctx.fail(exc.response.text)
+    except:
+        click.echo("failed")
+        raise
+
+
+@structureset.command('list')
+@click.pass_context
+def structureset_list(ctx):
+    """List structure sets"""
+
+    req = ctx.obj['session'].get(ctx.obj['structureset_url'])
+    req.raise_for_status()
+    structuresets = req.json()
+
+    table_data = [['name', 'description', 'superset']]
+
+    for sset in structuresets:
+        table_data.append([sset['name'], sset['description'], sset.get('superset', '(none)')])
+
+    if sys.stdout.isatty():
+        table_instance = SingleTable(table_data)
+    else:
+        table_instance = AsciiTable(table_data)
+    click.echo(table_instance.table)
 
 
 @cli.group()
