@@ -25,7 +25,7 @@ def try_verify_by_system_ca_bundle():
     return None
 
 
-def xyz_parser_iterator(string, include_match_object=False):
+def xyz_parser_iterator(string, include_match_object=False, unmatched_cb=None):
     """
     Yields a tuple `(natoms, comment, atomiter)`for each frame
     in a XYZ file where `atomiter` is an iterator yielding a
@@ -33,6 +33,7 @@ def xyz_parser_iterator(string, include_match_object=False):
 
     :param string: a string containing XYZ-structured text
     :param include_match_object: append the original regex match object to the returned tuple
+    :param unmatched_cb: Callback for umatched (not-whitespace) content, gets the unmatched string
     """
 
     class BlockIterator(Iterator):
@@ -147,8 +148,16 @@ def xyz_parser_iterator(string, include_match_object=False):
 )                                                           # A positions block should be one or more lines
                     """, re.X | re.M)
 
+    last_end = 0
     for block in pos_block_regex.finditer(string):
         natoms = int(block.group('natoms'))
+
+        if unmatched_cb:
+            unmatched = string[last_end:block.start()]  # null-string if last_end=start
+            if unmatched.strip():  # if the unmatched string contains more than whitespace
+                unmatched_cb(unmatched)
+            last_end = block.end()
+
         if include_match_object:
             yield (
                 natoms,

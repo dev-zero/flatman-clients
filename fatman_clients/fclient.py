@@ -472,15 +472,22 @@ def struct(ctx):
               show_default=True, help="Replace an existing structure with the same name")
 @click.option('--dump/--no-dump', default=False,
               show_default=True, help="Dump the parsed out structure")
+@click.option('--edit/--no-edit', default=False,
+              show_default=True, help="Edit the structures manually before upload")
 @click.pass_context
-def struct_add(ctx, xyzfile, name, name_prefix, name_field, sets, pbc, cubic_cell, replace_existing, dump):
+def struct_add(ctx, xyzfile, name, name_prefix, name_field, sets, pbc, cubic_cell, replace_existing, dump, edit):
     """Upload a structure (in XYZ format)"""
 
-    structures = {}
+    structures = OrderedDict()
 
     complete_input = xyzfile.read()
 
-    for (_, comment, _, match) in xyz_parser_iterator(complete_input, True):
+    def unmatched_content_cb(unmatched):
+        click.echo("UNMATCHED CONTENT =>", file=sys.stderr)
+        click.echo(unmatched, file=sys.stderr)
+        click.echo("<= UNMATCHED CONTENT", file=sys.stderr)
+
+    for (_, comment, _, match) in xyz_parser_iterator(complete_input, True, unmatched_content_cb):
         if name:
             if len(structures) >= 1:
                 raise click.BadParameter("more than one structure found in XYZ file", param_hint='name')
@@ -499,6 +506,38 @@ def struct_add(ctx, xyzfile, name, name_prefix, name_field, sets, pbc, cubic_cel
         if dump:
             click.echo(complete_input[match.span()[0]:match.span()[1]])
 
+    overrides = OrderedDict()
+
+    if edit:
+        for name, (spos, epos) in structures.items():
+            click.echo("\nStructure:")
+            click.echo(complete_input[spos:epos])
+
+            override = {}
+
+            new_name = click.prompt("Name (leave empty to use default):", default=name)
+            if new_name and new_name != name:
+                override['name'] = new_name
+
+            charges = click.prompt("Initial charges (comma-separated list, leave empty for none):", default="")
+            magmoms = click.prompt("Initial magnetic moments (comma-separated list, leave empty for none):", default="")
+
+            # we are not sending JSON here, directly pass along the string and leave validation to the server
+            # .. otherwise Requests will send one charges field per list entry
+            if charges:
+                override['charges'] = charges
+            if magmoms:
+                override['magmoms'] = magmoms
+
+            if override:
+                overrides[name] = override
+
+        click.echo("Overridden/extended infos:")
+        for name, attributes in overrides.items():
+            click.echo("for structure '{}':".format(name))
+            for key, value in sorted(attributes.items()):
+                click.echo("    {}: {}".format(key, value))
+
     click.confirm("Do you want to upload the structures (total: {})?".format(len(structures)), abort=True)
 
     for name, (spos, epos) in structures.items():
@@ -512,6 +551,9 @@ def struct_add(ctx, xyzfile, name, name_prefix, name_field, sets, pbc, cubic_cel
             'replace_existing': replace_existing,
             'format': 'xyz',
             }
+
+        if name in overrides:
+            data.update(overrides[name])
 
         structure_file = BytesIO(complete_input[spos:epos].encode('utf-8'))
 
