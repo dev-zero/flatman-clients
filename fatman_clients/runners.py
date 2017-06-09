@@ -56,6 +56,19 @@ class SlurmRunner(RunnerBase):
     def __init__(self, *args, **kwargs):
         super(SlurmRunner, self).__init__(*args, **kwargs)
 
+        # add the srun and sbatch outputs to the list of output names here
+        # to make sure they always end up on the server.
+        for entry in self._settings['commands'] + [{'name': "sbatch"}]:
+            name = entry['name']
+            # the srun output files might be of interest if they exist
+            stdout_fn = path.join(self._task_dir, "{}.out".format(name))
+            stderr_fn = path.join(self._task_dir, "{}.err".format(name))
+            self.outfiles.add(stdout_fn)
+            self.outfiles.add(stderr_fn)
+
+        self._sbatch_out_fn = path.join(self._task_dir, "sbatch.out")
+        self._sbatch_err_fn = path.join(self._task_dir, "sbatch.err")
+
     def check(self):
         """Use squeue and sacct to check for the task."""
 
@@ -86,7 +99,15 @@ class SlurmRunner(RunnerBase):
 
         # we keep the header for this command to use the columns as keys
         if len(sacct_lines) < 2:
-            raise RuntimeError("job could not be found using either squeue or sacct")
+            # without runtime information from the scheduler, we are unable to say
+            # whether the command finished properly
+            self.data['errors'].append({
+                'tag': 'commands',
+                'entry': 'sacct',
+                'msg': "no runtime data available from scheduler",
+                })
+
+            raise RuntimeError("job could not be found by sacct, no additional runtime data available")
 
         # extract the header column names
         headers = [s.lower() for s in sacct_lines[0].split('|')]
@@ -107,7 +128,7 @@ class SlurmRunner(RunnerBase):
             try:
                 if sacct_data[name]['state'] != 'COMPLETED':
                     # if the entire job succeeded, we obviously decided to ignore the error
-                    # for this this command
+                    # for this command
                     # TODO: if the main job failed, we currently report all failed commands
                     #       as errors, even though we decided to ignore their errors
                     self.data['warnings' if self.success else 'errors'].append({
@@ -117,27 +138,16 @@ class SlurmRunner(RunnerBase):
                         'returncode': sacct_data[name]['exitcode'],
                         })
 
-                    # the srun output files might be of interest if they exist
-                    stdout_fn = path.join(self._task_dir, "{}.out".format(name))
-                    stderr_fn = path.join(self._task_dir, "{}.err".format(name))
-                    if path.exists(stdout_fn):
-                        self.outfiles.add(stdout_fn)
-                    if path.exists(stderr_fn):
-                        self.outfiles.add(stderr_fn)
-
             except KeyError:
                 # skipped commands do not appear at all in the sacct list of jobs
                 pass
 
     def run(self, running_task_func):
-        stdout_fn = path.join(self._task_dir, "sbatch.out")
-        stderr_fn = path.join(self._task_dir, "sbatch.err")
-
         logger.info("running sbatch")
 
         try:
-            stdout = open(stdout_fn, 'w')
-            stderr = open(stderr_fn, 'w')
+            stdout = open(self._sbatch_out_fn, 'w')
+            stderr = open(self._sbatch_err_fn, 'w')
         except (OSError, IOError) as exc:
             raise_from(
                 ClientError("error when opening {}".format(exc.filename)),
@@ -171,8 +181,6 @@ class SlurmRunner(RunnerBase):
         finally:
             stdout.close()
             stderr.close()
-            self.outfiles.add(stdout_fn)
-            self.outfiles.add(stderr_fn)
 
 
 class DirectRunner(RunnerBase):
