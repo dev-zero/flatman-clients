@@ -11,7 +11,7 @@ from itertools import chain
 # py2/3 compat calls
 from six import raise_from, exec_
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)  # pylint: disable=locally-disabled,invalid-name
 
 
 class ClientError(Exception):
@@ -224,7 +224,7 @@ class DirectRunner(RunnerBase):
         if modules:
             with open(os.devnull, 'w') as devnull:
                 mod_env_changes = subprocess.check_output(
-                    map(str, ['modulecmd', 'python', 'load'] + modules),  # pylint: disable=bad-builtin
+                    map(str, ['modulecmd', 'python', 'load'] + modules),  # pylint: disable=locally-disabled,bad-builtin
                     stderr=devnull)
                 # TODO: add check to ensure mod_env_changes
                 #       contains only assignments for os.environ
@@ -267,7 +267,7 @@ class DirectRunner(RunnerBase):
 
             try:
                 subprocess.check_call(
-                    map(str, [entry['cmd']] + entry['args']),  # pylint: disable=bad-builtin
+                    map(str, [entry['cmd']] + entry['args']),  # pylint: disable=locally-disabled,bad-builtin
                     stdout=stdout, stderr=stderr,
                     cwd=self._task_dir, preexec_fn=preexec_fn)
 
