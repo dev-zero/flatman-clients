@@ -228,13 +228,12 @@ def main(url, hostname, nap_time, data_dir,
                     else:
                         filepaths += add_filepaths
 
-                # also upload additional non-empty output files from all commands
-                filepaths += [f for f in runner.outfiles if path.getsize(f)]
-
-                logger.info("task %s: uploading output", task['id'])
+                # also upload additional existing non-empty output files from all commands
+                filepaths += [f for f in runner.outfiles if path.exists(f) and path.getsize(f)]
 
                 for filepath in filepaths:
                     data = {'name': path.relpath(filepath, task_dir)}
+                    logger.info("task %s: uploading '%s'", task['id'], data['name'])
                     with open(filepath, 'rb') as data_fh:
                         req = sess.post(task['_links']['uploads'],
                                         data=data, files={'data': data_fh})
