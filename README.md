@@ -24,3 +24,4 @@ pip install --editable .
 Afterwards, the following applications will be available:
 
   * fdaemon .. the work horse to fetch tasks, run them and shuffle back the data
+  * fclient .. CLI to query, create and alter data on the server
