@@ -14,6 +14,7 @@ setup(
         'requests>=2.9.1',
         'terminaltables>=3.1.0',
         'dpath>=1.4.0',
+        'periodictable>=1.5.0',
         ],
     entry_points='''
         [console_scripts]
