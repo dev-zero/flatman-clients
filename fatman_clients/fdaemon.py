@@ -3,6 +3,7 @@
 import socket
 import logging
 import shutil
+import getpass
 import os
 from os import path
 from time import sleep
@@ -105,6 +106,11 @@ def main(url, hostname, nap_time, data_dir,
     else:
         sess.verify = False
         urllib3.disable_warnings()
+
+    sess.headers.update({
+        'x-fatman-worker-hostname': hostname,
+        'x-fatman-worker-username': getpass.getuser(),  # easily fakeable, but only used for filtering, not auth
+        })
 
     while True:
         for task in task_iterator(sess, url, hostname, ignore_pending, ignore_running, acquire):
