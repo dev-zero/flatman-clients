@@ -38,7 +38,7 @@ def deltatest_comparison(ctx, collections, analysis,
                          plot_width, plot_height):
     """Do the deltatest comparison between two given Testresult Collections"""
 
-    from ..tools.deltatest import ATOMIC_ELEMENTS
+    from ..tools.deltatest import SYM_LIST, ATOMIC_ELEMENTS
 
     if analysis == 'delta' and len(collections) < 2:
         raise click.BadOptionUsage("Need at least two collections (reference and comparison) to get delta values")
@@ -143,10 +143,16 @@ def deltatest_comparison(ctx, collections, analysis,
             table_instance = get_table_instance(table_data)
             click.echo(table_instance.table)
 
+        # elements missing completely
+        missing_elements_all = [", ".join([e for e in SYM_LIST if e not in cdata['elements']])]*ncomparisons
+        # elements missing in respective comparisons (missing in one or the other collection)
+        missing_elements = [", ".join([l[0] for l in deltas if l[i+1] is None]) for i in range(ncomparisons)]
 
         stats_table_data = [
             ['Stat'] + header[1:],
-            ['available elements'] + available_deltas,
+            ['# of available deltas'] + available_deltas,
+            ['missing elements (all comparisons)'] + missing_elements_all,
+            ['missing elements (this comparison)'] + missing_elements,
             ['averages'] + averages,
             ]
         stats_table_instance = get_table_instance(stats_table_data)
