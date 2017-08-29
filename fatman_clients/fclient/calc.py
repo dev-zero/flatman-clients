@@ -53,6 +53,9 @@ def calc(ctx):
 @click.option('--task/--no-task', 'create_task',
               default=True, show_default=True,
               help="also create a task for this calculation")
+@click.option('--deferred-task/--no-deferred-task',
+              default=False, show_default=True,
+              help="whether the task is created as deferred")
 @click.option('--settings', type=str,
               help="pass additional settings for the calculation (to be specified as a string of JSON)")
 @click.option('--settings-file', type=click.File(mode='r'),
@@ -61,7 +64,7 @@ def calc(ctx):
               default=False, show_default=True,
               help="Ignore failure in creation of single calculations (likely caused by missing basis set or pseudo)")
 @click.pass_context
-def calc_add(ctx, structure_set, create_task, settings_file, **data):
+def calc_add(ctx, structure_set, create_task, deferred_task, settings_file, **data):
     """Create a new calculation on FATMAN.
 
     Examples:
@@ -116,6 +119,11 @@ def calc_add(ctx, structure_set, create_task, settings_file, **data):
     if settings_file:
         data['settings'] = json.load(settings_file)
 
+
+    task_creation_data = {}
+    if deferred_task:
+        task_creation_data['status'] = 'deferred'
+
     req = ctx.obj['session'].get(ctx.obj['calc_coll_url'])
     req.raise_for_status()
     calc_colls = req.json()
@@ -151,7 +159,7 @@ def calc_add(ctx, structure_set, create_task, settings_file, **data):
             if create_task:
                 for calculation in calculations:
                     click.echo(".. creating task for calculation '{id}'.. ".format(**calculation), nl=False)
-                    req = ctx.obj['session'].post(calculation['_links']['tasks'])
+                    req = ctx.obj['session'].post(calculation['_links']['tasks'], json=task_creation_data)
                     req.raise_for_status()
                     click.echo("succeeded")
             else:
@@ -193,7 +201,7 @@ def calc_add(ctx, structure_set, create_task, settings_file, **data):
 
         if create_task:
             click.echo("Creating task for calculation..")
-            req = ctx.obj['session'].post(req.json()['_links']['tasks'])
+            req = ctx.obj['session'].post(req.json()['_links']['tasks'], json=task_creation_data)
             req.raise_for_status()
             click.echo(json_pretty_dumps(req.json()))
         else:
