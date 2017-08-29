@@ -81,3 +81,18 @@ def task_upload_artifact(ctx, task_id, filename, name):
     req = ctx.obj['session'].post(task_content['_links']['uploads'],
                                   data={'name': name}, files={'data': filename})
     req.raise_for_status()
+
+
+@task.command('set-status')
+@click.argument('task_id', type=UUID)
+@click.argument('status', type=str)
+@click.pass_context
+def task_set_status(ctx, task_id, status):
+    """Set status of a task"""
+
+    req = ctx.obj['session'].get(ctx.obj['task_url'] + '/{}'.format(task_id))
+    req.raise_for_status()
+
+    task = req.json()
+    req = ctx.obj['session'].patch(task['_links']['self'], json={'status': status})
+    req.raise_for_status()
