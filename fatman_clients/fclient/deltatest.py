@@ -387,7 +387,6 @@ def deltatest_comparison(ctx, collections, analysis,
         import numpy as np
         from ..tools.deltatest import eos
 
-
         # it would be sufficient to get each testcollection instead,
         # but here we already have the list of all available elements
         comparison_url = '{url}/api/v2/comparisons'.format(**ctx.obj)
@@ -411,7 +410,7 @@ def deltatest_comparison(ctx, collections, analysis,
 
         prows = math.ceil(len(elements)/plot_columns)
 
-        fig, axarr = plt.subplots(prows, plot_columns)
+        fig, axarr = plt.subplots(prows, plot_columns, figsize=(plot_width, plot_height))
 
         if plot_columns == 1:
             axarr = np.array([axarr])
