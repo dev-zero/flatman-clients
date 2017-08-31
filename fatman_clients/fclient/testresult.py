@@ -108,8 +108,10 @@ def trcollections_list(ctx):
 
 @trcollections.command('show')
 @click.argument('id', type=UUID, required=True)
+@click.option('--extended-info/--no-extended-info', default=False, show_default=True,
+              help="Whether to fetch and show extended calculation info")
 @click.pass_context
-def trcollections_show(ctx, id):
+def trcollections_show(ctx, extended_info, id):
     """
     Show details for the specified collection
     """
@@ -127,11 +129,26 @@ def trcollections_show(ctx, id):
         ['id', 'test', 'data'],
         ]
 
+    if extended_info:
+        table_data[0].append("calc collections")
+
     for tr in trcoll['testresults']:
         entry = [tr['id'], tr['test']]
 
         if 'element' in tr['data']:
             entry.append("element: {element}".format(**tr['data']))
+        else:
+            entry.append("(unavail.)")
+
+        if extended_info:
+            req = ctx.obj['session'].get(tr['_links']['self'])
+            req.raise_for_status()
+            fulltr = req.json()
+
+            calcs = fulltr['calculations']
+
+            entry.append("\n".join(set(calc['collection'] for calc in fulltr['calculations'])))
+
 
         table_data.append(entry)
 
