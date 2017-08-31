@@ -97,6 +97,8 @@ def main(url, hostname, nap_time, data_dir,
          ssl_verify):
     """FATMAN Calculation Runner Daemon"""
 
+    logging.basicConfig(format='%(asctime)s %(name)-12s %(levelname)-8s %(message)s')
+
     os.chdir(data_dir)
 
     sess = requests.Session()
