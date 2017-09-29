@@ -6,7 +6,7 @@ from collections import OrderedDict
 
 import click
 
-from . import cli, get_table_instance
+from . import cli, get_table_instance, bool2str
 
 @cli.group()
 @click.pass_context
@@ -126,7 +126,7 @@ def trcollections_show(ctx, extended_info, id):
     click.echo("Testresults ({testresult_count}):\n".format(**trcoll))
 
     table_data = [
-        ['id', 'test', 'data'],
+        ['id', 'test', 'data', 'data:checks'],
         ]
 
     if extended_info:
@@ -135,10 +135,16 @@ def trcollections_show(ctx, extended_info, id):
     for tr in trcoll['testresults']:
         entry = [tr['id'], tr['test']]
 
-        if 'element' in tr['data']:
-            entry.append("element: {element}".format(**tr['data']))
+        tdata = tr['data']
+        if 'element' in tdata:
+            entry.append("element: {element}".format(**tdata))
         else:
             entry.append("(unavail.)")
+
+        if 'checks' in tdata:
+            entry.append(", ".join(["{}: {}".format(k, bool2str(v)) for k, v in tdata['checks'].items()]))
+        else:
+            entry.append("")
 
         if extended_info:
             req = ctx.obj['session'].get(tr['_links']['self'])

@@ -27,6 +27,10 @@ def get_table_instance(table_data):
         return AsciiTable(table_data)
 
 
+def bool2str(value):
+    return u'\N{check mark}' if value else u'\N{heavy multiplication x}'
+
+
 @click.group()
 @click.option('--url', type=str,
               default='https://tctdb.chem.uzh.ch/fatman', show_default=True,
