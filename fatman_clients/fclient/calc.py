@@ -225,8 +225,9 @@ def calc_add(ctx, structure_set, create_task, deferred_task, settings_file, **da
 @click.option('--with-details/--without-details',
               default=False, show_default=True,
               help="fetch details for selected calculations")
+@click.option('--sorted-by', type=str, help="sort by the specified column (a posteriori)")
 @click.pass_context
-def calc_list(ctx, show_ids, columns, csv_output, with_details, **filters):
+def calc_list(ctx, show_ids, columns, csv_output, with_details, sorted_by, **filters):
     """
     List calculations. Use the parameters to limit the list to certain subsets of calculations
     """
@@ -250,13 +251,14 @@ def calc_list(ctx, show_ids, columns, csv_output, with_details, **filters):
                 req.raise_for_status()
                 cal.update(req.json())
 
+    header = []
     table_data = []
 
     if not columns:
-        table_data.append(['test', 'structure', 'code', 'collection', 'last modified', 'status', 'result_avail?'])
+        header = ['test', 'structure', 'code', 'collection', 'last modified', 'status', 'result_avail?']
 
         if show_ids:
-            table_data[0] += ['calc_id', 'current_task_id']
+            header += ['calc_id', 'current_task_id']
 
         for cal in calcs:
             table_data.append([
@@ -268,17 +270,23 @@ def calc_list(ctx, show_ids, columns, csv_output, with_details, **filters):
     else:
         # so, a '--column a=b/c --column d=e --column =g/h/i' results in a header 'a,d,' with contents of b/c, e, g/h/i
         header, paths = zip(*[p.split('=', 1) if '=' in p else (p.split('/')[-1], p) for p in columns])
-
-        table_data.append(header)
-
         table_data += [[dpath.util.get(c, p) for p in paths] for c in calcs]
+
+
+    if sorted_by:
+        try:
+            column_idx = header.index(sorted_by)
+        except ValueError:
+            raise click.BadParameter("specified column name not found: '{}'".format(sorted_by), param_hint='sorted_by')
+
+        table_data.sort(key=lambda l: l[column_idx])
 
     if csv_output:
         writer = csv.writer(sys.stdout)
         # when printing CSV we don't print an empty header
-        writer.writerows(table_data if any(h for h in table_data[0]) else table_data[1:])
+        writer.writerows([header] + table_data if any(h for h in header) else table_data)
     else:
-        table_instance = get_table_instance(table_data)
+        table_instance = get_table_instance([header] + table_data)
         click.echo(table_instance.table)
 
 
