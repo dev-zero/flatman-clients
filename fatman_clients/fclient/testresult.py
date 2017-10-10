@@ -131,6 +131,7 @@ def trcollections_show(ctx, extended_info, id):
 
     if extended_info:
         table_data[0].append("calc collections")
+        table_data[0].append("calc ids")
 
     for tr in trcoll['testresults']:
         entry = [tr['id'], tr['test']]
@@ -154,6 +155,7 @@ def trcollections_show(ctx, extended_info, id):
             calcs = fulltr['calculations']
 
             entry.append("\n".join(set(calc['collection'] for calc in fulltr['calculations'])))
+            entry.append("\n".join(calc['id'] for calc in fulltr['calculations']))
 
 
         table_data.append(entry)
