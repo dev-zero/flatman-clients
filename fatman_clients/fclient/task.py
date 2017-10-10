@@ -96,3 +96,25 @@ def task_set_status(ctx, task_id, status):
     task = req.json()
     req = ctx.obj['session'].patch(task['_links']['self'], json={'status': status})
     req.raise_for_status()
+
+
+@task.command('read')
+@click.argument('task_id', type=UUID)
+@click.argument('artifact_name', type=str)
+@click.pass_context
+def task_read_artifact(ctx, task_id, artifact_name):
+    """Download and display artifact in a pager"""
+
+    req = ctx.obj['session'].get(ctx.obj['task_url'] + '/{}'.format(task_id))
+    req.raise_for_status()
+    task_content = req.json()
+
+    for artifact in task_content['infiles'] + task_content['outfiles']:
+        if artifact['name'] == artifact_name:
+            req = ctx.obj['session'].get(artifact['_links']['download'])
+            req.raise_for_status()
+
+            click.echo_via_pager(req.text)
+            break
+    else:
+        raise click.UsageError("artifact not found: {}".format(artifact_name))
