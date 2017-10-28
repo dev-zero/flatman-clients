@@ -2,6 +2,7 @@
 import sys
 import json
 import csv
+import textwrap
 
 from uuid import UUID
 
@@ -327,3 +328,36 @@ def calc_retry(ctx, ids):
 
         req = ctx.obj['session'].post(calc_content['_links']['tasks'])
         req.raise_for_status()
+
+
+@cli.group()
+@click.pass_context
+def ccollections(ctx):
+    """Manage calculation collectionss"""
+    ctx.obj['ccollections_url'] = '{url}/api/v2/calculationcollections'.format(**ctx.obj)
+
+
+@ccollections.command('list')
+@click.pass_context
+def ccollections_list(ctx):
+    """
+    List calculation collections
+    """
+
+    req = ctx.obj['session'].get(ctx.obj['ccollections_url'])
+    req.raise_for_status()
+    ccolls = req.json()
+
+    table_data = [
+        ['id', 'name', 'description'],
+        ]
+
+    for ccoll in ccolls:
+        table_data.append([
+            ccoll['id'],
+            "\n".join(textwrap.wrap(ccoll['name'], width=20)),
+            "\n".join(textwrap.wrap(ccoll['desc'], width=40)),
+            ])
+
+    table_instance = get_table_instance(table_data)
+    click.echo(table_instance.table)
