@@ -121,7 +121,7 @@ def calc_add(ctx, structure_set, create_task, deferred_task, settings_file, **da
         data['settings'] = json.load(settings_file)
 
 
-    task_creation_data = {}
+    task_creation_data = {'status': 'new'}
     if deferred_task:
         task_creation_data['status'] = 'deferred'
 
