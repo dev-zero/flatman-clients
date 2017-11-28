@@ -8,6 +8,7 @@ from uuid import UUID
 
 import click
 import requests
+from requests.utils import parse_header_links
 import six
 import dpath
 
@@ -16,6 +17,8 @@ from . import cli, json_pretty_dumps, get_table_instance
 
 # the maximal number of calculations to fetch details for
 MAX_CALC_DETAILS = 200
+# the maximal number of calculations the server gives us per-page
+MAX_CALC_PER_PAGE = 200
 
 
 def validate_basis_set_families(ctx, param, values):
@@ -227,8 +230,10 @@ def calc_add(ctx, structure_set, create_task, deferred_task, settings_file, **da
               default=False, show_default=True,
               help="fetch details for selected calculations")
 @click.option('--sorted-by', type=str, help="sort by the specified column (a posteriori)")
+@click.option('--fetch-all/--no-fetch-all', default=False, show_default=True,
+              help="fetch all entries instead of the first N returned by the server")
 @click.pass_context
-def calc_list(ctx, show_ids, columns, csv_output, with_details, sorted_by, **filters):
+def calc_list(ctx, show_ids, columns, csv_output, with_details, sorted_by, fetch_all, **filters):
     """
     List calculations. Use the parameters to limit the list to certain subsets of calculations
     """
@@ -236,9 +241,23 @@ def calc_list(ctx, show_ids, columns, csv_output, with_details, sorted_by, **fil
     # filter out filters not specified
     params = {k: v for k, v in filters.items() if v is not None}
 
+    if fetch_all:  # reduce the number of requests by maxing the number of entries per page
+        params['per_page'] = MAX_CALC_PER_PAGE
+
     req = ctx.obj['session'].get(ctx.obj['calc_url'], params=params)
     req.raise_for_status()
     calcs = req.json()
+
+    if fetch_all and (len(calcs) < int(req.headers['X-total-count'])):
+        while True:
+            try:
+                next_link = [l['url'] for l in parse_header_links(req.headers['Link']) if l['rel'] == 'next'][0]
+            except IndexError:
+                break
+
+            req = ctx.obj['session'].get(next_link, params=params)
+            req.raise_for_status()
+            calcs += req.json()
 
     if with_details:
         if len(calcs) > MAX_CALC_DETAILS:
