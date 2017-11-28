@@ -1,12 +1,13 @@
 
 import re
-
+from uuid import UUID
 from io import BytesIO
 
 import click
 import requests
 
-from . import cli, json_pretty_dumps
+from . import cli, json_pretty_dumps, get_table_instance
+
 
 @cli.group()
 @click.pass_context
@@ -89,3 +90,64 @@ def basis_add(ctx, basisset_file, dump_basis):
             raise
 
         click.echo("succeeded")
+
+
+@basis.command('list')
+@click.option('--element', type=str,
+              help="filter by element")
+@click.option('--family', type=str,
+              help="filter by Basis Set family name")
+@click.pass_context
+def basis_list(ctx, **filters):
+    """List available basis sets"""
+
+    # filter out filters not specified
+    params = {k: v for k, v in filters.items() if v is not None}
+
+    req = ctx.obj['session'].get(ctx.obj['basis_url'], params=params)
+    req.raise_for_status()
+
+    basis_sets = req.json()
+
+    table_data = [['id', 'element', 'family', ], ]
+    for basis_set in basis_sets:
+        table_data.append([basis_set[f] for f in table_data[0]])
+
+    click.echo(get_table_instance(table_data).table)
+
+
+@basis.command('download')
+@click.argument('basis_set_ids', type=UUID, nargs=-1, required=False)
+@click.option('--element', type=str,
+              help="filter by element")
+@click.option('--family', type=str,
+              help="filter by Basis Set family name")
+@click.pass_context
+def basis_download(ctx, basis_set_ids, **filters):
+    """
+    Download basis sets to individual files 'BASIS_<family>-<element>' into the current working directory.
+    Either specify explicitly the IDs or filter by element or family."""
+
+    if not basis_set_ids and not (filters['element'] or filters['family']):
+        raise click.UsageError("you have to specify either an ID or filter by family and/or element")
+
+    # filter out filters not specified
+    params = {k: v for k, v in filters.items() if v is not None}
+
+    req = ctx.obj['session'].get(ctx.obj['basis_url'], params=params)
+    req.raise_for_status()
+
+    basis_sets = req.json()
+
+    filename = "BASIS_{family}-{element}"
+
+    for basis_set in basis_sets:
+        click.echo("Fetching basis set for {family}-{element}...".format(**basis_set))
+
+        req = ctx.obj['session'].get(basis_set['_links']['self'])
+        req.raise_for_status()
+        basis_set = req.json()
+
+        with open(filename.format(**basis_set), 'w') as fhandle:
+            fhandle.write("{element} {family}\n".format(**basis_set))
+            fhandle.write(basis_set['basis'])
