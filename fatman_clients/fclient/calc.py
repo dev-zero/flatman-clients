@@ -345,7 +345,7 @@ def calc_retry(ctx, ids):
         req.raise_for_status()
         calc_content = req.json()
 
-        req = ctx.obj['session'].post(calc_content['_links']['tasks'])
+        req = ctx.obj['session'].post(calc_content['_links']['tasks'], json={'status': 'new'})
         req.raise_for_status()
 
 
