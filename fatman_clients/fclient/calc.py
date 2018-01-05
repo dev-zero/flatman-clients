@@ -302,7 +302,7 @@ def calc_list(ctx, show_ids, columns, csv_output, with_details, sorted_by, fetch
         table_data.sort(key=lambda l: l[column_idx])
 
     if csv_output:
-        writer = csv.writer(sys.stdout)
+        writer = csv.writer(sys.stdout, lineterminator='\n')
         # when printing CSV we don't print an empty header
         writer.writerows([header] + table_data if any(h for h in header) else table_data)
     else:
