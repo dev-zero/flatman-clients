@@ -281,16 +281,40 @@ def calc_list(ctx, show_ids, columns, csv_output, with_details, sorted_by, fetch
             header += ['calc_id', 'current_task_id']
 
         for cal in calcs:
-            table_data.append([
-                cal['test'], cal['structure'], cal['code'], cal['collection'],
+            entry = [
+                cal['test'],
+                cal['structure'] if isinstance(cal['structure'], str) else cal['structure']['name'],
+                cal['code'],
+                cal['collection'],
                 cal.get('current_task', {}).get('mtime', "(unavail)"),
                 cal.get('current_task', {}).get('status', "(unavail)"),
                 cal['results_available'],
-                ] + ([cal['id'], cal.get('current_task', {}).get('id', "(unavail)")] if show_ids else []))
+                ]
+
+            if show_ids:
+                entry += [cal['id'], cal.get('current_task', {}).get('id', "(unavail)")]
+
+            table_data.append(entry)
     else:
         # so, a '--column a=b/c --column d=e --column =g/h/i' results in a header 'a,d,' with contents of b/c, e, g/h/i
+        # a default if the key was not found can be specified after a ':'
         header, paths = zip(*[p.split('=', 1) if '=' in p else (p.split('/')[-1], p) for p in columns])
-        table_data += [[dpath.util.get(c, p) for p in paths] for c in calcs]
+
+        def extract_data(data, path):
+            if ':' in path:
+                path, default = path.split(':')
+            else:
+                default = None
+
+            try:
+                return dpath.util.get(data, path)
+            except KeyError:
+                if default:
+                    return default
+                else:
+                    raise
+
+        table_data += [[extract_data(c, p) for p in paths] for c in calcs]
 
 
     if sorted_by:
