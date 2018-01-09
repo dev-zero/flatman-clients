@@ -31,11 +31,13 @@ from . import cli, get_table_instance
 @click.option('--plot-columns', type=int, default=2, help="Number of columns for the E(V)-curve analysis")
 @click.option('--plot-width', type=float, default=11.69, show_default=True, help="Plot width in inches")
 @click.option('--plot-height', type=float, default=8.27, show_default=True, help="Plot height in inches")
+@click.option('transparent_background', '--plot-transparent-bg', is_flag=True, default=False, show_default=True,
+              help="Use a transparent background (only saving images)")
 @click.pass_context
 def deltatest_comparison(ctx, collections, analysis,
                          csv_output, plot, hide_missing, labels, elements,
                          plot_measures, save_plot, plot_ylimit, plot_columns,
-                         plot_width, plot_height):
+                         plot_width, plot_height, transparent_background):
     """Do the deltatest comparison between two given Testresult Collections"""
 
     from ..tools.deltatest import SYM_LIST, ATOMIC_ELEMENTS
@@ -236,7 +238,7 @@ def deltatest_comparison(ctx, collections, analysis,
             plt.tight_layout()
 
             if save_plot:
-                plt.savefig(save_plot)
+                plt.savefig(save_plot, transparent=transparent_background)
             else:
                 plt.show()
 
@@ -377,7 +379,7 @@ def deltatest_comparison(ctx, collections, analysis,
             plt.tight_layout()
 
             if save_plot:
-                plt.savefig(save_plot, dpi=100)
+                plt.savefig(save_plot, dpi=100, transparent=transparent_background)
             else:
                 plt.show()
 
@@ -432,6 +434,6 @@ def deltatest_comparison(ctx, collections, analysis,
         plt.tight_layout()
 
         if save_plot:
-            plt.savefig(save_plot, dpi=100)
+            plt.savefig(save_plot, dpi=100, transparent=transparent_background)
         else:
             plt.show()
