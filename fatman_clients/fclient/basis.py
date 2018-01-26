@@ -18,17 +18,23 @@ def basis(ctx):
 
 @basis.command('add')
 @click.argument('basisset_file', type=click.File(mode='r'))
+@click.option('family_filter', '--filter', type=str,
+              required=False, default='.*', show_default=True,
+              help="Python regex to filter by name")
 @click.option('--dump-basis/--no-dump-basis',
               default=False, show_default=True,
               help="Dump also the basis during parsing")
 @click.pass_context
-def basis_add(ctx, basisset_file, dump_basis):
+def basis_add(ctx, basisset_file, family_filter, dump_basis):
     """Upload new basis sets from a file"""
     basissets = {}
     current_basis = None
 
     EMPTY_LINE = re.compile(r'^(\s*|\s*#.*)$')
     BLOCK_DEFINITION = re.compile(r'^\s*(?P<element>[a-zA-Z]{1,2})\s+(?P<family>\S+).*\n')
+    FAMILY_FILTER = re.compile(family_filter)
+
+    ignore_lines = False
 
     for line in basisset_file:
         if EMPTY_LINE.match(line):
@@ -41,6 +47,14 @@ def basis_add(ctx, basisset_file, dump_basis):
             if current_basis and dump_basis:
                 click.echo(basissets[current_basis].getvalue().decode('utf-8'))
 
+            if not FAMILY_FILTER.match(match.group('family')):
+                click.echo(("Ignoring basis set for element '{element}'"
+                            " and family '{family}' (filter does not match)").format(**match.groupdict()))
+                ignore_lines = True
+                continue
+            else:
+                ignore_lines = False
+
             click.echo(("Found basis set for element '{element}'"
                         " and family '{family}'").format(**match.groupdict()))
             current_basis = (match.group('element'), match.group('family'))
@@ -51,6 +65,9 @@ def basis_add(ctx, basisset_file, dump_basis):
 
             basissets[current_basis] = BytesIO()
             # we don't want this line to end up in our uploaded file
+            continue
+
+        if ignore_lines:
             continue
 
         if not current_basis:
