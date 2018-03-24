@@ -217,6 +217,7 @@ def calc_add(ctx, structure_set, create_task, deferred_task, settings_file, **da
 @click.option('--test', type=str, help="filter by test ('GW100, 'deltatest', ..)")
 @click.option('--structure', type=str, help="filter by structure ('GW100 Hydrogen peroxide', 'deltatest_H_1.00', ..)")
 @click.option('--code', type=str, help="filter by used code ('CP2K', 'QE', ..)")
+@click.option('--basis-set-family', type=str, help="filter by involved basis set family")
 @click.option('--status', type=str, help="filter by status ('done', 'new', 'running', ..)")
 @click.option('--show-ids/--no-show-ids',
               default=False, show_default=True,
@@ -248,16 +249,20 @@ def calc_list(ctx, show_ids, columns, csv_output, with_details, sorted_by, fetch
     req.raise_for_status()
     calcs = req.json()
 
-    if fetch_all and (len(calcs) < int(req.headers['X-total-count'])):
-        while True:
-            try:
-                next_link = [l['url'] for l in parse_header_links(req.headers['Link']) if l['rel'] == 'next'][0]
-            except IndexError:
-                break
+    total_count = int(req.headers['X-total-count'])
+    if total_count > len(calcs):
+        if fetch_all:
+            while True:
+                try:
+                    next_link = [l['url'] for l in parse_header_links(req.headers['Link']) if l['rel'] == 'next'][0]
+                except IndexError:
+                    break
 
-            req = ctx.obj['session'].get(next_link, params=params)
-            req.raise_for_status()
-            calcs += req.json()
+                req = ctx.obj['session'].get(next_link, params=params)
+                req.raise_for_status()
+                calcs += req.json()
+        else:
+            click.echo("WARNING: Result list truncated to {} elements of total {}".format(MAX_CALC_PER_PAGE, total_count), err=True)
 
     if with_details:
         if len(calcs) > MAX_CALC_DETAILS:
@@ -370,6 +375,64 @@ def calc_retry(ctx, ids):
         calc_content = req.json()
 
         req = ctx.obj['session'].post(calc_content['_links']['tasks'], json={'status': 'new'})
+        req.raise_for_status()
+
+
+@calc.command('tag')
+@click.argument('tag', type=str, required=True)
+@click.argument('ids', type=UUID, nargs=-1, required=False)
+@click.option('--collection', type=str, help="filter by collection")
+@click.option('--test', type=str, help="filter by test ('GW100, 'deltatest', ..)")
+@click.option('--structure', type=str, help="filter by structure ('GW100 Hydrogen peroxide', 'deltatest_H_1.00', ..)")
+@click.option('--code', type=str, help="filter by used code ('CP2K', 'QE', ..)")
+@click.option('--basis-set-family', type=str, help="filter by involved basis set family")
+@click.option('--status', type=str, help="filter by status ('done', 'new', 'running', ..)")
+@click.pass_context
+def calc_list(ctx, tag, ids, **filters):
+    """
+    List calculations. Use the parameters to limit the list to certain subsets of calculations
+    """
+
+    # filter out filters not specified
+    params = {k: v for k, v in filters.items() if v is not None}
+
+    if params and ids:
+        raise click.UsageError("can't specify both specific IDs and filters")
+
+    if params:
+        click.echo("Fetching calculations...", err=True)
+        req = ctx.obj['session'].get(ctx.obj['calc_url'], params=params)
+        req.raise_for_status()
+        ids = [c['id'] for c in req.json()]
+
+        if req.links['last']:
+            while True:
+                try:
+                    next_link = [l['url'] for l in parse_header_links(req.headers['Link']) if l['rel'] == 'next'][0]
+                except IndexError:
+                    break
+
+                req = ctx.obj['session'].get(next_link, params=params)
+                req.raise_for_status()
+                ids += [c['id'] for c in req.json()]
+
+    if params and ids:  # if selected by params and the search returned something
+        click.confirm("Are you sure you want to tag {} calculations with '{}'?".format(len(ids), tag), abort=True)
+
+    for cid in ids:
+        click.echo("Setting tag '{}' for calculation {}".format(tag, cid), err=True)
+        req = ctx.obj['session'].get(ctx.obj['calc_url'] + '/{}'.format(cid))
+        req.raise_for_status()
+        calc = req.json()
+
+        metadata = calc['metadata']
+
+        if not 'tags' in metadata:
+            metadata['tags'] = []
+
+        metadata['tags'].append(tag)
+
+        req = ctx.obj['session'].patch(calc['_links']['self'], json={'metadata': metadata})
         req.raise_for_status()
 
 
