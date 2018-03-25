@@ -17,14 +17,17 @@ def json_pretty_dumps(orig):
                       indent=4, separators=(',', ': '))
 
 
-def get_table_instance(table_data):
+def get_table_instance(table_data, has_header=True):
     from sys import stdout
     from terminaltables import SingleTable, AsciiTable
 
     if stdout.isatty():
-        return SingleTable(table_data)
+        tinstance = SingleTable(table_data)
     else:
-        return AsciiTable(table_data)
+        tinstance = AsciiTable(table_data)
+
+    tinstance.inner_heading_row_border = has_header
+    return tinstance
 
 
 def bool2str(value):
