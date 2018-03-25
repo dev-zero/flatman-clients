@@ -1,5 +1,7 @@
 
 import textwrap
+import csv
+import sys
 
 from uuid import UUID
 from collections import OrderedDict
@@ -19,6 +21,7 @@ def testresult(ctx):
 @click.option('--collection', type=str, help="filter by collection")
 @click.option('--test', type=str, help="filter by test ('GW100, 'deltatest', ..)")
 @click.option('--structure', type=str, help="filter by structure ('GW100 Hydrogen peroxide', 'deltatest_H_1.00', ..)")
+@click.option('--basis_set_family', type=str, help="filter by basis set family")
 @click.option('--data-checks', type=(str, bool), multiple=True,
               help="filter by succeeded/failed check (results without the given check will be filtered out)")
 @click.option('--data-element', type=str, help="filter by element (only deltatest results)")
@@ -71,8 +74,7 @@ def testresult_list(ctx, csv_output, header, **filters):
 
     if csv_output:
         writer = csv.writer(sys.stdout, lineterminator='\n')
-        # when printing CSV we don't print an empty header
-        writer.writerows(header_data + table_data)
+        writer.writerows([s.replace('\n', '\\n') for s in row] for row in header_data + table_data)
     else:
         table_instance = get_table_instance(header_data + table_data, header)
         click.echo(table_instance.table)
