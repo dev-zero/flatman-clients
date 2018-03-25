@@ -219,6 +219,8 @@ def calc_add(ctx, structure_set, create_task, deferred_task, settings_file, **da
 @click.option('--code', type=str, help="filter by used code ('CP2K', 'QE', ..)")
 @click.option('--basis-set-family', type=str, help="filter by involved basis set family")
 @click.option('--status', type=str, help="filter by status ('done', 'new', 'running', ..)")
+@click.option('--hide-tags', type=str, multiple=True,
+              help="hide calcs with the given tag(s), if not specified, server default is used")
 @click.option('--show-ids/--no-show-ids',
               default=False, show_default=True,
               help="add columns with calculation and task ids")
@@ -387,10 +389,11 @@ def calc_retry(ctx, ids):
 @click.option('--code', type=str, help="filter by used code ('CP2K', 'QE', ..)")
 @click.option('--basis-set-family', type=str, help="filter by involved basis set family")
 @click.option('--status', type=str, help="filter by status ('done', 'new', 'running', ..)")
+@click.option('--reset-tags/--no-reset-tags', help="completely reset tags before setting new one")
 @click.pass_context
-def calc_list(ctx, tag, ids, **filters):
+def calc_tag(ctx, tag, ids, reset_tags, **filters):
     """
-    List calculations. Use the parameters to limit the list to certain subsets of calculations
+    Tag calculations. Use the parameters to limit the list to certain subsets of calculations
     """
 
     # filter out filters not specified
@@ -401,6 +404,7 @@ def calc_list(ctx, tag, ids, **filters):
 
     if params:
         click.echo("Fetching calculations...", err=True)
+        params['hide_tags'] = ['dummy-tag-here']  # make sure that all calculations are found
         req = ctx.obj['session'].get(ctx.obj['calc_url'], params=params)
         req.raise_for_status()
         ids = [c['id'] for c in req.json()]
@@ -427,7 +431,7 @@ def calc_list(ctx, tag, ids, **filters):
 
         metadata = calc['metadata']
 
-        if not 'tags' in metadata:
+        if not 'tags' in metadata or reset_tags:
             metadata['tags'] = []
 
         metadata['tags'].append(tag)
