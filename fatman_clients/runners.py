@@ -56,6 +56,9 @@ class SlurmRunner(RunnerBase):
     def __init__(self, *args, **kwargs):
         super(SlurmRunner, self).__init__(*args, **kwargs)
 
+        # make sure the slurm output ends-up on the server if needed
+        self.outfiles.update({"slurm.out", "slurm.err"})
+
         # add the srun and sbatch outputs to the list of output names here
         # to make sure they always end up on the server.
         for entry in self._settings['commands'] + [{'name': "sbatch"}]:
@@ -63,8 +66,7 @@ class SlurmRunner(RunnerBase):
             # the srun output files might be of interest if they exist
             stdout_fn = path.join(self._task_dir, "{}.out".format(name))
             stderr_fn = path.join(self._task_dir, "{}.err".format(name))
-            self.outfiles.add(stdout_fn)
-            self.outfiles.add(stderr_fn)
+            self.outfiles.update({stdout_fn, stderr_fn})
 
         self._sbatch_out_fn = path.join(self._task_dir, "sbatch.out")
         self._sbatch_err_fn = path.join(self._task_dir, "sbatch.err")
