@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 
-from setuptools import setup
+from setuptools import setup, find_packages
 
 setup(
     name='fatman-clients',
     version='0.1.dev0',
-    packages=['fatman_clients'],
+    packages=find_packages(),
     license='GPL3',
     install_requires=[
         'click>=6.6',
