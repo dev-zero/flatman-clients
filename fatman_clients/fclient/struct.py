@@ -1,10 +1,13 @@
 
 import sys
 import json
+import os
+import cgi
 
 from io import BytesIO
 from uuid import UUID
 from collections import OrderedDict
+from os import path
 
 import click
 import requests
@@ -294,3 +297,37 @@ def structureset_list(ctx):
 
     table_instance = get_table_instance(table_data)
     click.echo(table_instance.table)
+
+
+@structureset.command('download')
+@click.argument('structureset_name', type=str)
+@click.pass_context
+def structureset_download(ctx, structureset_name):
+    """Download a complete structure set"""
+
+    target_dir = f"structureset_{structureset_name}"
+
+    req = ctx.obj['session'].get(ctx.obj['structureset_url'] + '/{}'.format(structureset_name))
+    req.raise_for_status()
+    structuresets = req.json()
+
+    req = ctx.obj['session'].get(structuresets['_links']['structures'])
+    req.raise_for_status()
+    structures = req.json()
+
+    os.mkdir(target_dir)
+
+    for structure in structures:
+        click.echo("downloading {}..".format(structure['name']), nl=False)
+
+        req = ctx.obj['session'].get(structure['_links']['download'], stream=True)
+        req.raise_for_status()
+
+        content_disp = req.headers['content-disposition']
+        _, params = cgi.parse_header(content_disp)
+
+        with open(path.join(target_dir, params['filename']), 'wb') as fhandle:
+            for chunk in req.iter_content(4096):
+                fhandle.write(chunk)
+
+        click.echo(" done")
