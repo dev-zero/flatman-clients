@@ -16,7 +16,7 @@ from . import cli, json_pretty_dumps, get_table_instance
 
 
 # the maximal number of calculations to fetch details for
-MAX_CALC_DETAILS = 200
+MAX_CALC_DETAILS = 600
 # the maximal number of calculations the server gives us per-page
 MAX_CALC_PER_PAGE = 200
 
@@ -210,6 +210,20 @@ def calc_add(ctx, structure_set, create_task, deferred_task, settings_file, **da
             click.echo(json_pretty_dumps(req.json()))
         else:
             click.echo("skipping task creation..")
+
+
+@calc.command('del')
+@click.argument('calc_id', type=UUID, nargs=-1, required=True)
+@click.pass_context
+def calc_delete(ctx, calc_id):
+    """Delete the specified calculations"""
+
+    for cid in calc_id:
+        try:
+            req = ctx.obj['session'].delete(ctx.obj['calc_url'] + '/{}'.format(cid))
+            req.raise_for_status()
+        except:
+            click.echo("deleting calculation '{}' failed".format(cid), err=True)
 
 
 @calc.command('list')
