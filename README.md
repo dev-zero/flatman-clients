@@ -1,11 +1,11 @@
-# FATMAN Clients
+# FLATMAN Clients
 
 To install:
 
 ```sh
 easy_install \
     --user \
-    "git+https://github.com/dev-zero/fatman-clients.git"
+    "git+https://github.com/dev-zero/flatman-clients.git"
 
 export PATH="${HOME}/.local/bin:${PATH}"
 ```
@@ -13,8 +13,8 @@ export PATH="${HOME}/.local/bin:${PATH}"
 .. or for development:
 
 ```sh
-git clone https://github.com/dev-zero/fatman-clients.git
-cd fatman-clients
+git clone https://github.com/dev-zero/flatman-clients.git
+cd flatman-clients
 
 virtualenv venv
 . venv/bin/activate
